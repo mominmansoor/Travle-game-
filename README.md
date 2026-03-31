@@ -32,3 +32,5 @@ npm run dev
 ```
 
 http://localhost:3000
+Or just try this: https://travle-game.vercel.app/
+
