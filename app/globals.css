@@ -2,26 +2,135 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+/* ── Theme variables (set by themeManager.ts) ─────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:      #0a0a0a;
+  --bg-alt:  #111111;
+  --text:    #ffffff;
+  --sub:     #444444;
+  --accent:  #00ff41;
+  --error:   #ff3333;
+  --warn:    #ff8c00;
+  --scanline-opacity: 0.05;
+
+  /* Backward-compat aliases so existing components need no changes */
+  --fg:      var(--text);
+  --green:   var(--accent);
+  --red:     var(--error);
+  --orange:  var(--warn);
+  --border:  var(--sub);
+  --dim:     var(--sub);
+  --grey:    var(--sub);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Scanline overlay — toggled via .scanlines class on body */
+body.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 2px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Blinking cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor::after {
+  content: '█';
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+.cursor-inline::after {
+  content: '▌';
+  animation: blink 0.8s step-end infinite;
+}
+
+/* Green text mode — toggled via .green-text on body */
+body.green-text {
+  --text: #00ff41;
+  --sub:  #007a1f;
+}
+
+/* ASCII box characters helpers */
+.box-h { border-top: 1px solid var(--sub); }
+.box-b { border-bottom: 1px solid var(--sub); }
+
+/* Scrollbar style */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--sub); }
+::-webkit-scrollbar-thumb:hover { background: var(--text); }
+
+/* Input reset */
+input, select, button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input:focus, button:focus, select:focus {
+  outline: none;
+}
+
+/* Glow effect for correct */
+.glow-green {
+  text-shadow: 0 0 8px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Fade-in for new items */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Shake for invalid */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.shake {
+  animation: shake 0.3s ease-out;
+}
+
+/* Type-on text animation */
+@keyframes typeOn {
+  from { width: 0; }
+  to   { width: 100%; }
 }
