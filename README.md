@@ -1,54 +1,80 @@
+<div align="center">
+
 # travle.exe
 
-A geography puzzle game that looks like a terminal. You get a starting country and a target country, and you have to get from one to the other by naming the countries in between. Every guess needs to share a land border with the last one you got right.
+**a geography puzzle game that looks like a terminal**
 
-**Play it here:** https://travle-game.vercel.app/
+get from one country to another by naming the countries in between
 
-## How a round works
+<a href="https://travle-game.vercel.app/"><img alt="play it" src="https://img.shields.io/badge/%3E_play_it-travle--game.vercel.app-0c1611?style=for-the-badge&labelColor=0c1611&color=00e64d" /></a>
 
-Each session gives you 5 levels, and they get harder as you go:
+<img alt="Next.js" src="https://img.shields.io/badge/Next.js_16-0a0a0a?style=flat-square&logo=nextdotjs&logoColor=00e64d" />
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-0a0a0a?style=flat-square&logo=typescript&logoColor=00e64d" />
+<img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-0a0a0a?style=flat-square&logo=tailwindcss&logoColor=00e64d" />
 
-| Level | Route length |
-| --- | --- |
-| 1 | 2 to 3 hops |
-| 2 | 4 to 5 hops |
-| 3 | 6 to 7 hops |
-| 4 | 8 to 10 hops |
-| 5 | 11 or more, through some very obscure countries |
+<br /><br />
 
-You get a number of guesses equal to the shortest route plus 5, and a wrong guess still uses one up. Beat a level to unlock the next one.
+<img src="docs/hero.png" alt="a level 3 round going from Senegal to Turkey, with the path so far lit up green across north Africa" width="100%" />
 
-Guesses are colour coded so you know how you are doing:
+</div>
 
-- **Green** means the guess moved you closer to the target.
-- **Orange** means it is a detour, so you are a bit off the best route.
-- **Grey** means it was wrong.
+<br />
 
-You do not have to follow the shortest route. If the countries you guessed link up into any valid chain from start to finish, you win.
+## the idea
 
-## How it works under the hood
+you get a start country and a target country. you type in countries one by one, and every one has to share a land border with the last one you got right. connect the two and you win.
 
-The world is stored as an adjacency list, where countries are nodes and shared land borders are edges. Each time you guess, a breadth first search runs from your current position to the target and compares the distance before and after, which is how the colours get decided.
+above is a level 3 round from Senegal to Turkey. Mauritania, Algeria and Libya are on track, Armenia was a detour and Brazil was a cry for help.
 
-Puzzles are generated from a seed with a small random number generator (mulberry32). The seed is picked fresh each browser session, so you get different routes every time you open the game, and each level only picks routes inside its hop range, with level 5 pulling from the more obscure landlocked countries.
+## how a round works
 
-Your stats live in local storage: games played, wins, current streak, best streak and a 30 day history chart. Nothing leaves your browser.
+every session gives you 5 levels and they get meaner as you go:
 
-## The fun extras
+| level | name | route length |
+| :-- | :-- | :-- |
+| 1 | easy | 2 to 3 hops |
+| 2 | medium | 4 to 5 hops |
+| 3 | hard | 6 to 7 hops |
+| 4 | expert | 8 to 10 hops |
+| 5 | nightmare | 11 or more, through some very obscure countries |
 
-- 20 colour themes, including Dracula, Nord, Tokyo Night, Gruvbox, Catppuccin Mocha, Synthwave and a plain green on black terminal.
-- CRT scanlines, sound effects and a green text mode, all of which you can switch on or off in settings.
-- A shareable result line so you can show off your score.
+you get guesses equal to the shortest route plus 5, and a wrong guess still eats one. beat a level to unlock the next.
 
-## Stack
+<img src="docs/path-log.png" alt="the path log showing green, orange and grey guesses" width="100%" />
 
-- Next.js 16 (App Router, Turbopack)
-- TypeScript
-- Tailwind CSS
-- react-simple-maps for the world map
-- world-atlas for the topojson data
+every guess gets a colour so you know how you're doing:
 
-## Running it locally
+| colour | meaning |
+| :-- | :-- |
+| 🟩 green | you moved one step closer to the target |
+| 🟧 orange | a detour, you're a bit off the best route |
+| ⬜ grey | way off, or doesn't connect at all |
+
+you don't have to follow the shortest route either. if the countries you guessed link up into any valid chain from start to finish, it counts.
+
+<img src="docs/solved.png" alt="the path complete panel showing efficiency and a shareable result row" width="100%" />
+
+when you finish you get your efficiency and a little emoji row you can share to flex on people.
+
+## themes
+
+20 of them. Dracula, Nord, Tokyo Night, Gruvbox, Catppuccin Mocha, Synthwave, Amber, Matrix and more, plus the plain green on black one it ships with.
+
+<img src="docs/themes.png" alt="the same round in six themes: dracula, synthwave, nord, amber, tokyo night and gruvbox" width="100%" />
+
+<sub>dracula, synthwave, nord, amber, tokyo night, gruvbox</sub>
+
+there's also CRT scanlines, sound effects and a green text mode, all toggleable in settings.
+
+## under the hood
+
+the world is an adjacency list. countries are nodes and shared land borders are edges. every guess runs a breadth first search to the target and compares the distance before and after, and that's what decides the colour.
+
+puzzles come from a seed fed into a tiny random number generator (mulberry32). the seed is fresh every browser session so you get new routes each time you open it, and each level only picks routes inside its hop range. level 5 pulls from the weird landlocked countries on purpose.
+
+your stats sit in local storage: games played, wins, current streak, best streak and a 30 day history chart. nothing leaves your browser.
+
+## run it yourself
 
 ```bash
 git clone https://github.com/mominmansoor/Travle-game-
@@ -57,13 +83,19 @@ npm install
 npm run dev
 ```
 
-Then head to http://localhost:3000.
+then open http://localhost:3000
 
-## Where things live
+## where things live
 
 ```
 app/          the page and layout
 components/   map, guess input, guess history, stats chart, terminal frame, theme picker
 data/         countries, border data, puzzle generation, themes
 lib/          BFS pathfinding, game state, audio, theme handling
+docs/         the screenshots in this readme
 ```
+
+<div align="center">
+<br />
+<sub><code>&gt; built with react-simple-maps and world-atlas</code></sub>
+</div>
