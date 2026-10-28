@@ -11,6 +11,7 @@ import { useSettings } from "@/components/SettingsProvider";
 import { generatePuzzle, getSessionSeed, getTodayString, levelSeed } from "@/data/puzzles";
 import { COUNTRY_MAP } from "@/data/countries";
 import { evaluateGuess, findConnectedPath } from "@/lib/bfs";
+import { isSeaLink } from "@/data/seaLinks";
 import {
   initLevelState,
   recordLevelResult,
@@ -40,31 +41,59 @@ export default function Home() {
   const [showStats, setShowStats] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
+  const [guessError, setGuessError] = useState("");
+
+  const ocean = settings.oceanCrossings;
 
   useEffect(() => {
-    const seed = getSessionSeed();
-    setSessionSeed(seed);
+    setSessionSeed(getSessionSeed());
+  }, []);
 
+  // (Re)build all five levels whenever the session starts or the
+  // ocean-crossings setting flips — the graph changes, so the old
+  // routes and their optimal paths would no longer be valid.
+  useEffect(() => {
+    if (!sessionSeed) return;
     const states = [1, 2, 3, 4, 5].map((level) => {
-      const puzzle = generatePuzzle(levelSeed(seed, level, 0), level);
+      const puzzle = generatePuzzle(levelSeed(sessionSeed, level, 0), level, ocean);
       if (!puzzle) return null;
-      return initLevelState("session", level, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength);
+      return initLevelState("session", level, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength, ocean);
     });
 
     setLevelStates(states);
-    setUnlockedLevel(1);
-  }, []);
+    setPuzzleIdxs([0, 0, 0, 0, 0]);
+    setGuessError("");
+  }, [sessionSeed, ocean]);
 
   const currentState = levelStates[activeLevel - 1];
   const startName = currentState ? (COUNTRY_MAP.get(currentState.startCode)?.name ?? currentState.startCode) : "";
   const endName = currentState ? (COUNTRY_MAP.get(currentState.endCode)?.name ?? currentState.endCode) : "";
 
-  function handleGuess(code: string, name: string) {
-    if (!currentState || currentState.status !== "playing") return;
+  /** Countries that can't be entered: the start, plus anything already guessed. */
+  const usedCodes = new Set<string>(
+    currentState ? [currentState.startCode, ...currentState.guesses.map((g) => g.code)] : []
+  );
+
+  function handleGuess(code: string, name: string): boolean {
+    if (!currentState || currentState.status !== "playing") return false;
+
+    // No entering the same country twice (or "guessing" where you started)
+    if (usedCodes.has(code)) {
+      setGuessError(
+        code === currentState.startCode
+          ? `${name.toUpperCase()} IS YOUR START`
+          : `ALREADY VISITED ${name.toUpperCase()}`
+      );
+      audio.greyGuess();
+      return false;
+    }
+    setGuessError("");
+
+    const levelOcean = currentState.oceanCrossings ?? false;
 
     // Last country in the green chain is the "current position" for coloring
     const lastGreen = currentState.greenChain[currentState.greenChain.length - 1];
-    const color = evaluateGuess(code, lastGreen, currentState.endCode);
+    const color = evaluateGuess(code, lastGreen, currentState.endCode, levelOcean);
 
     if (color === "green")       audio.greenGuess();
     else if (color === "orange") audio.orangeGuess();
@@ -83,7 +112,8 @@ export default function Home() {
     const connectedPath = findConnectedPath(
       newGuesses.map((g) => g.code),
       currentState.startCode,
-      currentState.endCode
+      currentState.endCode,
+      levelOcean
     );
     const won = connectedPath !== null;
     // Use the connected path as greenChain for win animation if found
@@ -113,6 +143,7 @@ export default function Home() {
       setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
       recordLevelResult(false);
     }
+    return true;
   }
 
   function handleShare() {
@@ -130,9 +161,10 @@ export default function Home() {
 
   function handleReset() {
     const curIdx = puzzleIdxs[activeLevel - 1];
-    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, curIdx), activeLevel);
+    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, curIdx), activeLevel, ocean);
     if (!puzzle) return;
-    const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength);
+    const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength, ocean);
+    setGuessError("");
     const newLevelStates = [...levelStates];
     newLevelStates[activeLevel - 1] = fresh;
     setLevelStates(newLevelStates);
@@ -140,9 +172,10 @@ export default function Home() {
 
   function handleNext() {
     const nextIdx = puzzleIdxs[activeLevel - 1] + 1;
-    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, nextIdx), activeLevel);
+    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, nextIdx), activeLevel, ocean);
     if (!puzzle) return;
-    const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength);
+    const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength, ocean);
+    setGuessError("");
     const newPuzzleIdxs = [...puzzleIdxs];
     newPuzzleIdxs[activeLevel - 1] = nextIdx;
     setPuzzleIdxs(newPuzzleIdxs);
@@ -153,6 +186,7 @@ export default function Home() {
 
   function switchLevel(level: number) {
     setActiveLevel(level);
+    setGuessError("");
     audio.menuNav();
     setShowSettings(false);
     setShowStats(false);
@@ -247,10 +281,22 @@ export default function Home() {
                 { key: "scanlines", label: "SCANLINES" },
                 { key: "sounds", label: "SOUNDS" },
                 { key: "greenText", label: "GREEN TEXT MODE" },
-              ] as { key: keyof typeof settings; label: string }[]
-            ).map(({ key, label }) => (
+                {
+                  key: "oceanCrossings",
+                  label: "OCEAN CROSSINGS",
+                  hint: "straits + islands count as borders (new puzzles)",
+                },
+              ] as { key: keyof typeof settings; label: string; hint?: string }[]
+            ).map(({ key, label, hint }) => (
               <div key={key} className="flex items-center justify-between">
-                <span style={{ color: "var(--dim)" }}>{label}</span>
+                <span style={{ color: "var(--dim)" }}>
+                  {label}
+                  {hint && (
+                    <span style={{ display: "block", fontSize: "0.65rem", color: "var(--grey)" }}>
+                      {hint}
+                    </span>
+                  )}
+                </span>
                 <button
                   onClick={() => updateSettings({ [key]: !settings[key] })}
                   style={{
@@ -356,6 +402,11 @@ export default function Home() {
                 <span style={{ color: "var(--fg)" }}>{startName}</span>
                 <span style={{ color: "var(--dim)" }}>→</span>
                 <span style={{ color: "var(--orange)" }}>{endName}</span>
+                {currentState.oceanCrossings && (
+                  <span style={{ color: "var(--dim)", marginLeft: "auto", fontSize: "0.7rem" }}>
+                    ~ OCEAN ON
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-4 flex-wrap">
                 <span style={{ color: "var(--dim)" }}>
@@ -431,7 +482,19 @@ export default function Home() {
           {/* Input */}
           {currentState.status === "playing" ? (
             <div className="w-full mb-2">
-              <GuessInput onSubmit={handleGuess} />
+              <GuessInput onSubmit={handleGuess} excluded={usedCodes} />
+              {guessError && (
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--red)",
+                    marginTop: "6px",
+                    textAlign: "center",
+                  }}
+                >
+                  ✗ {guessError}
+                </div>
+              )}
               <div
                 style={{
                   fontSize: "0.7rem",
@@ -440,7 +503,7 @@ export default function Home() {
                   textAlign: "center",
                 }}
               >
-                GREEN = on path &nbsp;|&nbsp; ORANGE = detour &nbsp;|&nbsp; GREY = off track
+                GREEN = on path &nbsp;|&nbsp; ORANGE = detour &nbsp;|&nbsp; GREY = off track{currentState.oceanCrossings ? " | ~ sea routes on" : ""}
               </div>
             </div>
           ) : (
@@ -502,7 +565,16 @@ export default function Home() {
                     OPTIMAL PATH:
                   </div>
                   <div style={{ color: "var(--dim)", fontSize: "0.75rem", marginBottom: "12px", wordBreak: "break-word" }}>
-                    {currentState.optimalPath.map((c) => COUNTRY_MAP.get(c)?.name ?? c).join(" → ")}
+                    {currentState.optimalPath.map((c, i) => {
+                      const name = COUNTRY_MAP.get(c)?.name ?? c;
+                      if (i === 0) return name;
+                      const prev = currentState.optimalPath[i - 1];
+                      const viaSea =
+                        currentState.oceanCrossings &&
+                        isSeaLink(prev, c) &&
+                        !(COUNTRY_MAP.get(prev)?.neighbors ?? []).includes(c);
+                      return `${viaSea ? " ~> " : " → "}${name}`;
+                    }).join("")}
                   </div>
                   <div className="flex gap-2 justify-center flex-wrap">
                     <button onClick={handleShare} style={{ color: "var(--green)", background: "none", border: "1px solid var(--green)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>

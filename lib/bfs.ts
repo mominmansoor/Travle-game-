@@ -1,10 +1,22 @@
 import { COUNTRY_MAP } from "@/data/countries";
+import { SEA_NEIGHBORS } from "@/data/seaLinks";
+
+/**
+ * Neighbours of a country. Land borders always count; sea crossings
+ * (straits, island chains, Bering Strait…) only when `ocean` is on.
+ */
+export function getNeighbors(code: string, ocean = false): string[] {
+  const land = COUNTRY_MAP.get(code)?.neighbors ?? [];
+  if (!ocean) return land;
+  const sea = SEA_NEIGHBORS.get(code) ?? [];
+  return sea.length ? Array.from(new Set([...land, ...sea])) : land;
+}
 
 /**
  * BFS shortest path between two country codes.
  * Returns the full path as an array of codes, or null if unreachable.
  */
-export function bfsPath(start: string, end: string): string[] | null {
+export function bfsPath(start: string, end: string, ocean = false): string[] | null {
   if (start === end) return [start];
   const visited = new Set<string>();
   const queue: { code: string; path: string[] }[] = [{ code: start, path: [start] }];
@@ -12,9 +24,7 @@ export function bfsPath(start: string, end: string): string[] | null {
 
   while (queue.length > 0) {
     const { code, path } = queue.shift()!;
-    const country = COUNTRY_MAP.get(code);
-    if (!country) continue;
-    for (const neighbor of country.neighbors) {
+    for (const neighbor of getNeighbors(code, ocean)) {
       if (visited.has(neighbor)) continue;
       const newPath = [...path, neighbor];
       if (neighbor === end) return newPath;
@@ -26,8 +36,8 @@ export function bfsPath(start: string, end: string): string[] | null {
 }
 
 /** Returns just the shortest path length (edges), or Infinity if unreachable */
-export function shortestPathLength(start: string, end: string): number {
-  const path = bfsPath(start, end);
+export function shortestPathLength(start: string, end: string, ocean = false): number {
+  const path = bfsPath(start, end, ocean);
   if (!path) return Infinity;
   return path.length - 1; // edges = nodes - 1
 }
@@ -51,21 +61,22 @@ export type GuessResult = "green" | "orange" | "grey";
 export function evaluateGuess(
   guessCode: string,
   lastGreenCode: string,
-  endCode: string
+  endCode: string,
+  ocean = false
 ): GuessResult {
-  const distGuessToEnd = shortestPathLength(guessCode, endCode);
+  const distGuessToEnd = shortestPathLength(guessCode, endCode, ocean);
   if (distGuessToEnd === Infinity) return "grey";
 
-  const distLastGreenToEnd = shortestPathLength(lastGreenCode, endCode);
+  const distLastGreenToEnd = shortestPathLength(lastGreenCode, endCode, ocean);
 
-  const lastGreenNeighbors = COUNTRY_MAP.get(lastGreenCode)?.neighbors ?? [];
+  const lastGreenNeighbors = getNeighbors(lastGreenCode, ocean);
   const directBorder = lastGreenNeighbors.includes(guessCode);
 
   // GREEN: direct border AND one step closer on an optimal path
   if (directBorder && distGuessToEnd === distLastGreenToEnd - 1) return "green";
 
   // Excess detour cost for orange/grey
-  const distLastGreenToGuess = shortestPathLength(lastGreenCode, guessCode);
+  const distLastGreenToGuess = shortestPathLength(lastGreenCode, guessCode, ocean);
   if (distLastGreenToGuess === Infinity) return "grey";
 
   const extra = distLastGreenToGuess + distGuessToEnd - distLastGreenToEnd;
@@ -80,7 +91,8 @@ export function evaluateGuess(
 export function findConnectedPath(
   guessedCodes: string[],
   startCode: string,
-  endCode: string
+  endCode: string,
+  ocean = false
 ): string[] | null {
   const allowed = new Set(guessedCodes);
   allowed.add(startCode);
@@ -90,14 +102,11 @@ export function findConnectedPath(
   visited.add(startCode);
 
   // Check if startCode itself borders endCode
-  const startCountry = COUNTRY_MAP.get(startCode);
-  if (startCountry?.neighbors.includes(endCode)) return [startCode, endCode];
+  if (getNeighbors(startCode, ocean).includes(endCode)) return [startCode, endCode];
 
   while (queue.length > 0) {
     const { code, path } = queue.shift()!;
-    const country = COUNTRY_MAP.get(code);
-    if (!country) continue;
-    for (const neighbor of country.neighbors) {
+    for (const neighbor of getNeighbors(code, ocean)) {
       // Win as soon as any reachable guessed country borders endCode
       if (neighbor === endCode) return [...path, endCode];
       if (!allowed.has(neighbor) || visited.has(neighbor)) continue;
@@ -113,11 +122,11 @@ export function findConnectedPath(
  * for a given list of codes. Used for puzzle generation.
  * Returns a Map<"A-B", number> for quick lookup.
  */
-export function buildDistanceCache(codes: string[]): Map<string, number> {
+export function buildDistanceCache(codes: string[], ocean = false): Map<string, number> {
   const cache = new Map<string, number>();
   for (let i = 0; i < codes.length; i++) {
     for (let j = i + 1; j < codes.length; j++) {
-      const dist = shortestPathLength(codes[i], codes[j]);
+      const dist = shortestPathLength(codes[i], codes[j], ocean);
       if (dist !== Infinity) {
         cache.set(`${codes[i]}-${codes[j]}`, dist);
         cache.set(`${codes[j]}-${codes[i]}`, dist);

@@ -52,6 +52,12 @@ every guess gets a colour so you know how you're doing:
 
 you don't have to follow the shortest route either. if the countries you guessed link up into any valid chain from start to finish, it counts.
 
+no double dipping: once you've entered a country you can't enter it again, and your start country is off limits too.
+
+### ocean crossings
+
+flip **OCEAN CROSSINGS** on in `[CFG]` and short sea hops start counting as borders: the English Channel, Gibraltar, the Red Sea, the Korea Strait, Pacific island chains, and the Bering Strait so you can go straight from the United States to Russia. that's also what lets island countries like Japan, Sri Lanka, Australia and Fiji show up in puzzles. long open-ocean jumps (no crossing the Atlantic) are left out on purpose. toggling it rebuilds all five levels with the new map, and sea hops show as `~>` in the optimal path.
+
 <img src="docs/solved.png" alt="the path complete panel showing efficiency and a shareable result row" width="100%" />
 
 when you finish you get your efficiency and a little emoji row you can share to flex on people.
@@ -68,7 +74,7 @@ there's also CRT scanlines, sound effects and a green text mode, all toggleable 
 
 ## under the hood
 
-the world is an adjacency list. countries are nodes and shared land borders are edges. every guess runs a breadth first search to the target and compares the distance before and after, and that's what decides the colour.
+the world is an adjacency list. countries are nodes and shared land borders are edges, with an optional second layer of sea edges for ocean mode. every guess runs a breadth first search to the target and compares the distance before and after, and that's what decides the colour.
 
 puzzles come from a seed fed into a tiny random number generator (mulberry32). the seed is fresh every browser session so you get new routes each time you open it, and each level only picks routes inside its hop range. level 5 pulls from the weird landlocked countries on purpose.
 
@@ -90,7 +96,7 @@ then open http://localhost:3000
 ```
 app/          the page and layout
 components/   map, guess input, guess history, stats chart, terminal frame, theme picker
-data/         countries, border data, puzzle generation, themes
+data/         countries, border data, sea links, puzzle generation, themes
 lib/          BFS pathfinding, game state, audio, theme handling
 docs/         the screenshots in this readme
 ```

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { loadSettings, saveSettings, Settings } from "@/lib/gameState";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, Settings } from "@/lib/gameState";
 import { setSoundEnabled as audioSetEnabled } from "@/lib/audio";
 import { applyTheme, getSavedTheme, saveTheme } from "@/lib/themeManager";
 
@@ -14,7 +14,7 @@ interface SettingsCtx {
 }
 
 const Ctx = createContext<SettingsCtx>({
-  settings: { scanlines: true, sounds: true, greenText: false },
+  settings: DEFAULT_SETTINGS,
   updateSettings: () => {},
   currentTheme: "terminal",
   setTheme: () => {},
@@ -22,11 +22,7 @@ const Ctx = createContext<SettingsCtx>({
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<Settings>({
-    scanlines: true,
-    sounds: true,
-    greenText: false,
-  });
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [currentTheme, setCurrentTheme] = useState("terminal");
   const [themeVersion, setThemeVersion] = useState(0);
 

@@ -5,12 +5,15 @@ import { COUNTRIES } from "@/data/countries";
 import audio from "@/lib/audio";
 
 interface GuessInputProps {
-  onSubmit: (code: string, name: string) => void;
+  /** Return false to reject the guess (input stays, box shakes). */
+  onSubmit: (code: string, name: string) => boolean | void;
   disabled?: boolean;
+  /** Country codes that can't be guessed again — hidden from suggestions. */
+  excluded?: Set<string>;
   placeholder?: string;
 }
 
-export default function GuessInput({ onSubmit, disabled, placeholder }: GuessInputProps) {
+export default function GuessInput({ onSubmit, disabled, placeholder, excluded }: GuessInputProps) {
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState<typeof COUNTRIES>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -32,8 +35,9 @@ export default function GuessInput({ onSubmit, disabled, placeholder }: GuessInp
     const lower = v.toLowerCase();
     const matches = COUNTRIES.filter(
       (c) =>
-        c.name.toLowerCase().startsWith(lower) ||
-        c.name.toLowerCase().includes(lower)
+        !excluded?.has(c.code) &&
+        (c.name.toLowerCase().startsWith(lower) ||
+          c.name.toLowerCase().includes(lower))
     ).slice(0, 8);
     setSuggestions(matches);
     setSelectedIdx(0);
@@ -70,7 +74,10 @@ export default function GuessInput({ onSubmit, disabled, placeholder }: GuessInp
       return;
     }
 
-    onSubmit(country.code, country.name);
+    if (onSubmit(country.code, country.name) === false) {
+      triggerShake();
+      return;
+    }
     setValue("");
     setSuggestions([]);
     setSelectedIdx(0);
@@ -83,7 +90,10 @@ export default function GuessInput({ onSubmit, disabled, placeholder }: GuessInp
   }
 
   function selectSuggestion(c: (typeof COUNTRIES)[number]) {
-    onSubmit(c.code, c.name);
+    if (onSubmit(c.code, c.name) === false) {
+      triggerShake();
+      return;
+    }
     setValue("");
     setSuggestions([]);
     inputRef.current?.focus();

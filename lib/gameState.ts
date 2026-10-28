@@ -20,6 +20,8 @@ export interface LevelState {
   pathLength: number;
   /** Ordered chain of GREEN-guessed countries starting with startCode */
   greenChain: string[];
+  /** Whether sea crossings count as connections for this puzzle */
+  oceanCrossings?: boolean;
 }
 
 export interface DayStats {
@@ -46,12 +48,15 @@ export interface Settings {
   scanlines: boolean;
   sounds: boolean;
   greenText: boolean;
+  /** Allow moves across straits / island chains (incl. the Bering Strait) */
+  oceanCrossings: boolean;
 }
 
-const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   scanlines: true,
   sounds: true,
   greenText: false,
+  oceanCrossings: false,
 };
 
 // ── Level State ──────────────────────────────────────────────────────────────
@@ -87,7 +92,8 @@ export function initLevelState(
   startCode: string,
   endCode: string,
   optimalPath: string[],
-  pathLength: number
+  pathLength: number,
+  oceanCrossings = false
 ): LevelState {
   return {
     date,
@@ -100,6 +106,7 @@ export function initLevelState(
     optimalPath,
     pathLength,
     greenChain: [startCode],
+    oceanCrossings,
   };
 }
 

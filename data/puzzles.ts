@@ -1,5 +1,5 @@
-import { LANDLOCKED_ELIGIBLE } from "@/data/countries";
-import { bfsPath, OBSCURE_CODES } from "@/lib/bfs";
+import { COUNTRIES } from "@/data/countries";
+import { bfsPath, getNeighbors, OBSCURE_CODES } from "@/lib/bfs";
 
 export interface Puzzle {
   start: string;
@@ -32,8 +32,10 @@ const DIFFICULTY_RANGES: Record<number, [number, number]> = {
   5: [11, 99],
 };
 
-function candidatesForLevel(level: number): string[] {
-  const eligible = LANDLOCKED_ELIGIBLE;
+function candidatesForLevel(level: number, ocean: boolean): string[] {
+  // Any country with at least one connection can be used. With ocean
+  // crossings on, that pulls in island nations like Japan or Sri Lanka.
+  const eligible = COUNTRIES.filter((c) => getNeighbors(c.code, ocean).length > 0);
   if (level === 5) {
     return eligible
       .filter((c) => OBSCURE_CODES.has(c.code))
@@ -43,7 +45,7 @@ function candidatesForLevel(level: number): string[] {
     return eligible.map((c) => c.code);
   }
   return eligible
-    .filter((c) => c.neighbors.length >= 2)
+    .filter((c) => getNeighbors(c.code, ocean).length >= 2)
     .map((c) => c.code);
 }
 
@@ -51,11 +53,11 @@ function candidatesForLevel(level: number): string[] {
  * Generate a puzzle for a given difficulty level using a raw numeric seed.
  * seed = sessionSeed + level * prime + puzzleIdx * prime2
  */
-export function generatePuzzle(seed: number, level: number): Puzzle | null {
+export function generatePuzzle(seed: number, level: number, ocean = false): Puzzle | null {
   const rng = mulberry32(seed);
 
   const [minLen, maxLen] = DIFFICULTY_RANGES[level];
-  const candidates = candidatesForLevel(level);
+  const candidates = candidatesForLevel(level, ocean);
 
   if (candidates.length < 2) return null;
 
@@ -64,7 +66,7 @@ export function generatePuzzle(seed: number, level: number): Puzzle | null {
     const end = pickRandom(candidates, rng);
     if (start === end) continue;
 
-    const path = bfsPath(start, end);
+    const path = bfsPath(start, end, ocean);
     if (!path) continue;
 
     const len = path.length - 1;
@@ -76,7 +78,7 @@ export function generatePuzzle(seed: number, level: number): Puzzle | null {
   // Fallback
   for (let i = 0; i < candidates.length; i++) {
     for (let j = i + 1; j < candidates.length; j++) {
-      const path = bfsPath(candidates[i], candidates[j]);
+      const path = bfsPath(candidates[i], candidates[j], ocean);
       if (!path) continue;
       const len = path.length - 1;
       if (len >= minLen && len <= maxLen) {
