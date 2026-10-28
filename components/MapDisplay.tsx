@@ -12,8 +12,8 @@ import {
   ZoomableGroup,
 } from "react-simple-maps";
 import { TOPO_NAME_TO_ALPHA2 } from "@/data/countryCodeMap";
-import { COUNTRY_MAP } from "@/data/countries";
-import { isSeaLink } from "@/data/seaLinks";
+import { nodeName, isWater } from "@/data/nodes";
+import { WATERS } from "@/data/waters";
 import {
   COUNTRY_GEO,
   MAP_HEIGHT,
@@ -68,9 +68,7 @@ const zoomFilter = ((e: MouseEvent | WheelEvent | TouchEvent) => {
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-function nameOf(code: string) {
-  return COUNTRY_MAP.get(code)?.name ?? code;
-}
+const nameOf = nodeName;
 
 export default function MapDisplay({
   guesses,
@@ -297,8 +295,7 @@ export default function MapDisplay({
         if (!getNeighbors(a, ocean).includes(b)) continue;
         const ends = hopEndpoints(a, b);
         if (!ends) continue;
-        const land = COUNTRY_MAP.get(a)?.neighbors.includes(b) ?? false;
-        out.push({ key: `${a}-${b}`, from: ends[0], to: ends[1], sea: !land && isSeaLink(a, b) });
+        out.push({ key: `${a}-${b}`, from: ends[0], to: ends[1], sea: isWater(a) || isWater(b) });
       }
     }
     return out;
@@ -391,7 +388,7 @@ export default function MapDisplay({
           ))}
           {linked.map((code) => {
             const g = COUNTRY_GEO.get(code);
-            if (!g) return null;
+            if (!g || isWater(code)) return null;
             return (
               <Marker key={`node-${code}`} coordinates={g.anchor} style={{ default: { pointerEvents: "none" } }}>
                 <circle r={2.8 * u} fill={colors.text} stroke={colors.bg} strokeWidth={1.2 * u} />
@@ -422,6 +419,43 @@ export default function MapDisplay({
               </Marker>
             );
           })}
+
+          {/* Seas and oceans: a faint ≈ until you name one, then it's labelled */}
+          {ocean &&
+            WATERS.map((w) => {
+              const s = styleFor(w.code);
+              const named = guessColorMap.has(w.code) || winLit.has(w.code) || (status === "lost" && optimalSet.has(w.code));
+              const color = winLit.has(w.code)
+                ? colors.accent
+                : guessColorMap.get(w.code) ?? (named ? colors.accent : `${colors.sub}`);
+              return (
+                <Marker
+                  key={w.code}
+                  coordinates={w.anchor}
+                  onMouseMove={(e: React.MouseEvent) => trackPointer(w.code, e)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  <text
+                    className={`map-label ${s.className ?? ""}`}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ fontSize: (named ? 15 : 12) * u, fill: color, stroke: colors.bg, strokeWidth: 2 * u, cursor: "default" }}
+                  >
+                    ≈
+                  </text>
+                  {named && (
+                    <text
+                      className="map-label"
+                      y={11 * u}
+                      textAnchor="middle"
+                      style={{ fontSize: 9.5 * u, fill: color, stroke: colors.bg, strokeWidth: 3 * u, fontStyle: "italic" }}
+                    >
+                      {w.name}
+                    </text>
+                  )}
+                </Marker>
+              );
+            })}
 
           {/* Start / target labels */}
           {startGeo && (
@@ -465,7 +499,7 @@ export default function MapDisplay({
         <span><i style={{ background: colors.warn }} /> DETOUR</span>
         <span><i style={{ background: colors.sub }} /> OFF TRACK</span>
         <span><b style={{ color: colors.text }}>─</b> LINKED</span>
-        {ocean && <span><b style={{ color: colors.text }}>╌</b> SEA HOP</span>}
+        {ocean && <span><b style={{ color: colors.text }}>╌ ≈</b> VIA WATER</span>}
         {status === "lost" && <span><i style={{ background: `${colors.accent}40`, outline: `1px solid ${colors.accent}` }} /> BEST ROUTE</span>}
         <span className="map-hint">DRAG · CTRL+SCROLL / PINCH TO ZOOM</span>
       </div>

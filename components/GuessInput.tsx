@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { COUNTRIES } from "@/data/countries";
+import { COUNTRY_OPTIONS, GuessOption } from "@/data/nodes";
 import audio from "@/lib/audio";
 
 interface GuessInputProps {
@@ -10,12 +10,14 @@ interface GuessInputProps {
   disabled?: boolean;
   /** Country codes that can't be guessed again — hidden from suggestions. */
   excluded?: Set<string>;
+  /** What can be typed in (countries, plus seas/oceans in ocean mode). */
+  options?: GuessOption[];
   placeholder?: string;
 }
 
-export default function GuessInput({ onSubmit, disabled, placeholder, excluded }: GuessInputProps) {
+export default function GuessInput({ onSubmit, disabled, placeholder, excluded, options = COUNTRY_OPTIONS }: GuessInputProps) {
   const [value, setValue] = useState("");
-  const [suggestions, setSuggestions] = useState<typeof COUNTRIES>([]);
+  const [suggestions, setSuggestions] = useState<GuessOption[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [shaking, setShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,12 +48,12 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
       return;
     }
     const lower = v.toLowerCase();
-    const matches = COUNTRIES.filter(
-      (c) =>
-        !excluded?.has(c.code) &&
-        (c.name.toLowerCase().startsWith(lower) ||
-          c.name.toLowerCase().includes(lower))
-    ).slice(0, 8);
+    // Prefix matches first, then matches anywhere (name or alias)
+    const terms = (c: GuessOption) => [c.name, ...(c.aliases ?? [])].map((t) => t.toLowerCase());
+    const open = options.filter((c) => !excluded?.has(c.code));
+    const prefix = open.filter((c) => terms(c).some((t) => t.startsWith(lower)));
+    const inner = open.filter((c) => !prefix.includes(c) && terms(c).some((t) => t.includes(lower)));
+    const matches = [...prefix, ...inner].slice(0, 8);
     setSuggestions(matches);
     setSelectedIdx(0);
   }
@@ -83,7 +85,8 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
     if (!country) {
       // Try exact match by name
       const lower = value.toLowerCase();
-      country = COUNTRIES.find((c) => c.name.toLowerCase() === lower) ?? null;
+      country =
+        options.find((c) => [c.name, ...(c.aliases ?? [])].some((t) => t.toLowerCase() === lower)) ?? null;
     }
 
     if (!country) {
@@ -106,7 +109,7 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
     setTimeout(() => setShaking(false), 400);
   }
 
-  function selectSuggestion(c: (typeof COUNTRIES)[number]) {
+  function selectSuggestion(c: GuessOption) {
     if (onSubmit(c.code, c.name) === false) {
       triggerShake();
       return;
@@ -186,7 +189,9 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
               }}
               onMouseEnter={() => setSelectedIdx(i)}
             >
-              {i === selectedIdx ? `> ${c.name}` : `  ${c.name}`}
+              {i === selectedIdx ? "> " : "  "}
+              {c.water && <span style={{ color: "var(--accent)" }}>≈ </span>}
+              {c.name}
             </div>
           ))}
         </div>

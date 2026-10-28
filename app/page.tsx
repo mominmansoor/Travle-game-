@@ -9,9 +9,8 @@ import MapDisplay from "@/components/MapDisplay";
 import ThemeSelector from "@/components/ThemeSelector";
 import { useSettings } from "@/components/SettingsProvider";
 import { generatePuzzle, getSessionSeed, getTodayString, levelSeed } from "@/data/puzzles";
-import { COUNTRY_MAP } from "@/data/countries";
 import { connectedComponent, evaluateGuess, findConnectedPath, nextStop } from "@/lib/bfs";
-import { isSeaLink } from "@/data/seaLinks";
+import { guessOptions, isWater, nodeName } from "@/data/nodes";
 import {
   initLevelState,
   recordLevelResult,
@@ -29,18 +28,11 @@ function maxGuesses(state: LevelState) {
   return state.pathLength + 5 - (state.hintsUsed ?? 0);
 }
 
-const nameOf = (code: string) => COUNTRY_MAP.get(code)?.name ?? code;
+const nameOf = nodeName;
 
-/** "France → Spain ~> Morocco" — sea hops get a wavy arrow */
-function routeText(codes: string[], ocean: boolean) {
-  return codes
-    .map((c, i) => {
-      if (i === 0) return nameOf(c);
-      const prev = codes[i - 1];
-      const sea = ocean && isSeaLink(prev, c) && !(COUNTRY_MAP.get(prev)?.neighbors ?? []).includes(c);
-      return `${sea ? " ~> " : " → "}${nameOf(c)}`;
-    })
-    .join("");
+/** "United States → ≈ Bering Strait → Russia" — water stops get a ≈ */
+function routeText(codes: string[]) {
+  return codes.map((c) => (isWater(c) ? `≈ ${nameOf(c)}` : nameOf(c))).join(" → ");
 }
 
 type Panel = "none" | "help" | "stats" | "themes" | "settings";
@@ -277,8 +269,8 @@ export default function Home() {
             </ul>
             <p>
               You get the shortest route + 5 guesses, and each country can only be entered once. Stuck? <b>[HINT]</b> shows
-              the next stop, but burns a guess. Turn on <b>ocean crossings</b> in [CFG] to hop straits and islands
-              (yes, Alaska → Russia works).
+              the next stop, but burns a guess. Turn on <b>ocean crossings</b> in [CFG] and seas and oceans become
+              stops too: to cross water you have to name it, e.g. United States → Bering Strait → Russia.
             </p>
             <div style={{ textAlign: "right" }}>
               <button className="tbtn primary" onClick={() => setPanel("none")}>[ GOT IT ]</button>
@@ -293,7 +285,7 @@ export default function Home() {
           <div className="flex flex-col gap-3" style={{ fontSize: "0.85rem" }}>
             {(
               [
-                { key: "oceanCrossings", label: "OCEAN CROSSINGS", hint: "straits + islands count as borders · rebuilds puzzles" },
+                { key: "oceanCrossings", label: "OCEAN CROSSINGS", hint: "name seas & oceans to cross them · rebuilds puzzles" },
                 { key: "sounds", label: "SOUNDS" },
                 { key: "scanlines", label: "SCANLINES" },
                 { key: "greenText", label: "GREEN TEXT MODE" },
@@ -460,7 +452,9 @@ export default function Home() {
           {/* Input */}
           {currentState.status === "playing" ? (
             <div className="w-full mb-3">
-              <GuessInput onSubmit={handleGuess} excluded={usedCodes} />
+              <GuessInput onSubmit={handleGuess} excluded={usedCodes} options={guessOptions(levelOcean)}
+                placeholder={levelOcean ? "TYPE A COUNTRY, SEA OR OCEAN..." : undefined}
+              />
               <div className="input-foot">
                 {guessError ? (
                   <span style={{ color: "var(--red)" }}>✗ {guessError}</span>
@@ -497,7 +491,7 @@ export default function Home() {
 
                 <div className="route-summary">
                   <span>{currentState.status === "won" ? "YOUR ROUTE" : "BEST ROUTE"}</span>
-                  {routeText(currentState.status === "won" ? currentState.greenChain : currentState.optimalPath, levelOcean)}
+                  {routeText(currentState.status === "won" ? currentState.greenChain : currentState.optimalPath)}
                 </div>
 
                 <div className="emoji-trail">

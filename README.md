@@ -56,13 +56,9 @@ no double dipping: once you've entered a country you can't enter it again, and y
 
 ### ocean crossings
 
-flip **OCEAN CROSSINGS** on in `[CFG]` and short sea hops start counting as borders: the English Channel, Gibraltar, the Red Sea, the Korea Strait, Pacific island chains, and the Bering Strait so you can go straight from the United States to Russia. that's also what lets island countries like Japan, Sri Lanka, Australia and Fiji show up in puzzles. long open-ocean jumps (no crossing the Atlantic) are left out on purpose. toggling it rebuilds all five levels with the new map, and sea hops show as `~>` in the optimal path.
+flip **OCEAN CROSSINGS** on in `[CFG]` and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one costs a guess.
 
-<img src="docs/solved.png" alt="the path complete panel showing efficiency and a shareable result row" width="100%" />
-
-when you finish you get your efficiency and a little emoji row you can share to flex on people.
-
-stuck? **[HINT]** gives you the first letter of the next stop, hit it again for the full name. each hint burns one guess and shows up as 💡 in your share.
+there are 32 of them, from the five oceans down to straits like Gibraltar, and common names work too ("Med", "Bering Sea", "Arabian Gulf"). this is also what puts island countries like Japan, Sri Lanka, Australia and Fiji into puzzles. since an ocean touches dozens of coasts the world gets a lot smaller, so ocean mode uses shorter route lengths for each level. toggling it rebuilds all five levels.
 
 ### the map
 

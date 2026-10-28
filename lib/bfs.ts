@@ -1,15 +1,18 @@
 import { COUNTRY_MAP } from "@/data/countries";
-import { SEA_NEIGHBORS } from "@/data/seaLinks";
+import { COAST_WATERS, WATER_NEIGHBORS, isWater } from "@/data/waters";
 
 /**
- * Neighbours of a country. Land borders always count; sea crossings
- * (straits, island chains, Bering Strait…) only when `ocean` is on.
+ * Neighbours of a node. Land borders always count. With `ocean` on,
+ * countries also touch the seas/oceans on their coast, and waters touch
+ * their coasts and each other — but two countries are never linked
+ * straight across water: the sea itself has to be named as a stop.
  */
 export function getNeighbors(code: string, ocean = false): string[] {
+  if (isWater(code)) return ocean ? WATER_NEIGHBORS.get(code) ?? [] : [];
   const land = COUNTRY_MAP.get(code)?.neighbors ?? [];
   if (!ocean) return land;
-  const sea = SEA_NEIGHBORS.get(code) ?? [];
-  return sea.length ? Array.from(new Set([...land, ...sea])) : land;
+  const sea = COAST_WATERS.get(code) ?? [];
+  return sea.length ? [...land, ...sea] : land;
 }
 
 /**

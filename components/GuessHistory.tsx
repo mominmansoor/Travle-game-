@@ -55,7 +55,10 @@ export default function GuessHistory({ guesses, startName, endName }: GuessHisto
             >
               <span className="log-num">{String(i + 1).padStart(2, "0")}</span>
               <span style={{ color: style.accent }}>{style.char}</span>
-              <span className="flex-1">{g.name}</span>
+              <span className="flex-1">
+                {g.code.startsWith("~") && <span style={{ color: "var(--sub)" }}>≈ </span>}
+                {g.name}
+              </span>
               <span className="log-tag" style={{ color: style.accent }}>{style.label}</span>
             </div>
           );

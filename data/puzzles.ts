@@ -32,6 +32,17 @@ const DIFFICULTY_RANGES: Record<number, [number, number]> = {
   5: [11, 99],
 };
 
+// With seas and oceans as stops the world gets much smaller (no route is
+// longer than ~7 hops, since an ocean touches dozens of coasts), so ocean
+// mode scales its levels to the shorter routes that actually exist.
+const OCEAN_DIFFICULTY_RANGES: Record<number, [number, number]> = {
+  1: [2, 3],
+  2: [3, 4],
+  3: [4, 5],
+  4: [5, 6],
+  5: [6, 99],
+};
+
 function candidatesForLevel(level: number, ocean: boolean): string[] {
   // Any country with at least one connection can be used. With ocean
   // crossings on, that pulls in island nations like Japan or Sri Lanka.
@@ -56,7 +67,7 @@ function candidatesForLevel(level: number, ocean: boolean): string[] {
 export function generatePuzzle(seed: number, level: number, ocean = false): Puzzle | null {
   const rng = mulberry32(seed);
 
-  const [minLen, maxLen] = DIFFICULTY_RANGES[level];
+  const [minLen, maxLen] = (ocean ? OCEAN_DIFFICULTY_RANGES : DIFFICULTY_RANGES)[level];
   const candidates = candidatesForLevel(level, ocean);
 
   if (candidates.length < 2) return null;

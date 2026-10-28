@@ -4,6 +4,7 @@ import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson"
 import type { GeometryCollection, Topology } from "topojson-specification";
 import worldTopojson from "world-atlas/countries-110m.json";
 import { TOPO_NAME_TO_ALPHA2 } from "@/data/countryCodeMap";
+import { WATERS } from "@/data/waters";
 
 // Must match the <ComposableMap> props in MapDisplay
 export const MAP_WIDTH = 800;
@@ -90,23 +91,16 @@ export const COUNTRY_GEO: Map<string, CountryGeo> = (() => {
   for (const [code, pt] of Object.entries(MARKER_COUNTRIES)) {
     if (!m.has(code)) m.set(code, { anchor: pt, bounds: [pt, pt] });
   }
+  // Seas and oceans are drawn as a labelled point
+  for (const w of WATERS) m.set(w.code, { anchor: w.anchor, bounds: [w.anchor, w.anchor] });
   return m;
 })();
-
-/**
- * Where a route line should attach for a specific hop. Most hops use the
- * country's centre; a few sea crossings look better drawn at the strait.
- */
-const HOP_ANCHORS: Record<string, [number, number]> = {
-  "US>RU": [-162, 65.5], // Alaska side of the Bering Strait
-  "RU>US": [172, 65.5], // Chukotka side
-};
 
 export function hopEndpoints(a: string, b: string): [[number, number], [number, number]] | null {
   const ga = COUNTRY_GEO.get(a);
   const gb = COUNTRY_GEO.get(b);
   if (!ga || !gb) return null;
-  return [HOP_ANCHORS[`${a}>${b}`] ?? ga.anchor, HOP_ANCHORS[`${b}>${a}`] ?? gb.anchor];
+  return [ga.anchor, gb.anchor];
 }
 
 export const WORLD_VIEW: { center: [number, number]; zoom: number } = { center: [0, 0], zoom: 1 };
