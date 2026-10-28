@@ -43,44 +43,120 @@ export function shortestPathLength(start: string, end: string, ocean = false): n
 }
 
 /**
+ * Countries you're currently "standing on": the start plus every guessed
+ * country linked to it through other guesses. The target never counts.
+ */
+export function connectedComponent(
+  guessedCodes: string[],
+  startCode: string,
+  endCode: string,
+  ocean = false
+): Set<string> {
+  const allowed = new Set(guessedCodes);
+  allowed.delete(endCode);
+  const seen = new Set<string>([startCode]);
+  const queue = [startCode];
+  while (queue.length) {
+    const code = queue.shift()!;
+    for (const n of getNeighbors(code, ocean)) {
+      if (allowed.has(n) && !seen.has(n)) {
+        seen.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return seen;
+}
+
+/**
+ * Multi-source BFS: shortest path from ANY country in `from` to `end`.
+ * Returns the path (first element is in `from`), or null.
+ */
+export function pathFromSet(from: Set<string>, end: string, ocean = false): string[] | null {
+  if (from.has(end)) return [end];
+  const prev = new Map<string, string | null>();
+  const queue: string[] = [];
+  from.forEach((c) => {
+    prev.set(c, null);
+    queue.push(c);
+  });
+  while (queue.length) {
+    const code = queue.shift()!;
+    for (const n of getNeighbors(code, ocean)) {
+      if (prev.has(n)) continue;
+      prev.set(n, code);
+      if (n === end) {
+        const path = [n];
+        let cur: string | null = code;
+        while (cur) {
+          path.unshift(cur);
+          cur = prev.get(cur) ?? null;
+        }
+        return path;
+      }
+      queue.push(n);
+    }
+  }
+  return null;
+}
+
+/**
  * Evaluate a guess under the open-guess system.
  *
  * Every valid country name is always accepted — no border checking,
- * no rejection. The colour is purely informational feedback.
+ * no rejection. The colour is purely informational feedback, measured
+ * from everything you've already connected to the start (not just the
+ * last green), so an out-of-order guess that later links up still counts.
  *
- * GREEN  — guess directly borders lastGreen AND reduces BFS(→END) by 1
- *          (the only type that extends the winning green chain)
- * ORANGE — within 2 extra steps of optimal from lastGreen's position
+ * GREEN  — borders your connected chain AND is one step closer to the target
+ * ORANGE — within 2 extra steps of the best route from your chain
  * GREY   — 3+ extra steps away, unreachable island, or dead end
  *
- * "extra cost" = BFS(lastGreen→guess) + BFS(guess→END) − BFS(lastGreen→END)
- * (triangle-inequality excess; always >= 0)
+ * "extra cost" = BFS(chain→guess) + BFS(guess→END) − BFS(chain→END)
  */
 export type GuessResult = "green" | "orange" | "grey";
 
 export function evaluateGuess(
   guessCode: string,
-  lastGreenCode: string,
+  chain: Set<string>,
   endCode: string,
   ocean = false
 ): GuessResult {
   const distGuessToEnd = shortestPathLength(guessCode, endCode, ocean);
   if (distGuessToEnd === Infinity) return "grey";
 
-  const distLastGreenToEnd = shortestPathLength(lastGreenCode, endCode, ocean);
+  const toEnd = pathFromSet(chain, endCode, ocean);
+  if (!toEnd) return "grey";
+  const distChainToEnd = toEnd.length - 1;
 
-  const lastGreenNeighbors = getNeighbors(lastGreenCode, ocean);
-  const directBorder = lastGreenNeighbors.includes(guessCode);
+  let bordersChain = false;
+  chain.forEach((c) => {
+    if (!bordersChain && getNeighbors(c, ocean).includes(guessCode)) bordersChain = true;
+  });
 
-  // GREEN: direct border AND one step closer on an optimal path
-  if (directBorder && distGuessToEnd === distLastGreenToEnd - 1) return "green";
+  // GREEN: touches the chain AND one step closer on a shortest route
+  if (bordersChain && distGuessToEnd === distChainToEnd - 1) return "green";
 
-  // Excess detour cost for orange/grey
-  const distLastGreenToGuess = shortestPathLength(lastGreenCode, guessCode, ocean);
-  if (distLastGreenToGuess === Infinity) return "grey";
-
-  const extra = distLastGreenToGuess + distGuessToEnd - distLastGreenToEnd;
+  const toGuess = pathFromSet(chain, guessCode, ocean);
+  if (!toGuess) return "grey";
+  const extra = toGuess.length - 1 + distGuessToEnd - distChainToEnd;
   return extra <= 2 ? "orange" : "grey";
+}
+
+/**
+ * The next country to aim for: the first unguessed stop on a shortest
+ * route from your connected chain to the target.
+ */
+export function nextStop(
+  guessedCodes: string[],
+  startCode: string,
+  endCode: string,
+  ocean = false
+): string | null {
+  const chain = connectedComponent(guessedCodes, startCode, endCode, ocean);
+  const path = pathFromSet(chain, endCode, ocean);
+  if (!path || path.length < 2) return null;
+  return path[1] === endCode ? null : path[1];
 }
 
 /**

@@ -1,9 +1,32 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from "react-simple-maps";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ComposableMap,
+  Geographies,
+  Geography,
+  Graticule,
+  Line,
+  Marker,
+  Sphere,
+  ZoomableGroup,
+} from "react-simple-maps";
 import { TOPO_NAME_TO_ALPHA2 } from "@/data/countryCodeMap";
+import { COUNTRY_MAP } from "@/data/countries";
+import { isSeaLink } from "@/data/seaLinks";
+import {
+  COUNTRY_GEO,
+  MAP_HEIGHT,
+  MAP_SCALE,
+  MAP_WIDTH,
+  MARKER_COUNTRIES,
+  WORLD_VIEW,
+  clampView,
+  fitView,
+  hopEndpoints,
+} from "@/data/mapGeo";
 import { Guess } from "@/lib/gameState";
+import { connectedComponent, getNeighbors } from "@/lib/bfs";
 import { useSettings } from "@/components/SettingsProvider";
 import worldTopojson from "world-atlas/countries-110m.json";
 
@@ -14,24 +37,39 @@ interface MapDisplayProps {
   status: "idle" | "playing" | "won" | "lost";
   optimalPath: string[];
   greenChain: string[];
+  ocean?: boolean;
 }
 
-// Microstates too small for 110m topojson — rendered as dot markers
-const MICROSTATES: { code: string; label: string; coordinates: [number, number] }[] = [
-  { code: "AD", label: "AD", coordinates: [1.52, 42.55] },
-  { code: "MC", label: "MC", coordinates: [7.41, 43.73] },
-  { code: "SM", label: "SM", coordinates: [12.46, 43.94] },
-  { code: "VA", label: "VA", coordinates: [12.45, 41.90] },
-  { code: "LI", label: "LI", coordinates: [9.56, 47.14] },
-];
+type View = { center: [number, number]; zoom: number };
 
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 8;
-const DEFAULT_CENTER: [number, number] = [10, 10];
+const MAX_ZOOM = 10;
+const AUTO_FIT_MAX = 6;
+const TWEEN_MS = 650;
 
 function getCSSVar(name: string): string {
   if (typeof document === "undefined") return "#000";
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Plain scroll keeps scrolling the page; ctrl/⌘ + scroll (or a trackpad
+ * pinch, which arrives as ctrl+wheel) zooms. Drags still pan.
+ * Defined once at module level: react-simple-maps re-binds d3-zoom
+ * whenever this function's identity changes.
+ * (Typed loosely — the library's types say SVGElement, but at runtime
+ * it's handed the DOM event.)
+ */
+const zoomFilter = ((e: MouseEvent | WheelEvent | TouchEvent) => {
+  if (!e) return false;
+  if (e.type === "wheel") return (e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey;
+  return !("button" in e) || !(e as MouseEvent).button;
+}) as unknown as (element: SVGElement) => boolean;
+
+const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+function nameOf(code: string) {
+  return COUNTRY_MAP.get(code)?.name ?? code;
 }
 
 export default function MapDisplay({
@@ -41,191 +79,395 @@ export default function MapDisplay({
   status,
   optimalPath,
   greenChain,
+  ocean = false,
 }: MapDisplayProps) {
-  const { themeVersion } = useSettings();
+  const { themeVersion, settings } = useSettings();
 
-  const [zoom,     setZoom]     = useState(1);
-  const [center,   setCenter]   = useState<[number, number]>(DEFAULT_CENTER);
-  const [winLit,   setWinLit]   = useState<Set<string>>(new Set());
-  const [endPulse, setEndPulse] = useState(true);
+  const [view, setView] = useState<View>(WORLD_VIEW);
+  const [winLit, setWinLit] = useState<Set<string>>(new Set());
+  const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
+  const [follow, setFollow] = useState(true);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const tweenRef = useRef<number | null>(null);
+  const viewRef = useRef<View>(WORLD_VIEW);
+  viewRef.current = view;
 
-  // Resolve theme colors whenever theme changes
-  const colors = useMemo(() => ({
-    bg:     getCSSVar("--bg"),
-    bgAlt:  getCSSVar("--bg-alt"),
-    text:   getCSSVar("--text"),
-    sub:    getCSSVar("--sub"),
-    accent: getCSSVar("--accent"),
-    error:  getCSSVar("--error"),
-    warn:   getCSSVar("--warn"),
-  }), [themeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  // SVG units per screen pixel — keeps labels and dots readable on phones,
+  // where the 800-unit-wide map is squeezed into ~360px.
+  const [px, setPx] = useState(1);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPx(Math.min(2.4, Math.max(1, MAP_WIDTH / (el.clientWidth || MAP_WIDTH)))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  // Derived color constants from theme
-  const FILL_DIM      = colors.bgAlt;
-  const FILL_ACCENT   = colors.accent;
-  const FILL_GREY     = colors.sub;
-  const FILL_TEXT     = colors.text;
-  const FILL_REVEAL   = colors.bg; // dim bg tint for lost-state optimal path
-  const STROKE_DEF    = `${colors.sub}aa`;
-  const STROKE_DIM    = `${colors.sub}44`;
-  const STROKE_REVEAL = `${colors.accent}44`;
+  // ── Theme colours ────────────────────────────────────────────────────────
+  const colors = useMemo(
+    () => ({
+      bg: getCSSVar("--bg"),
+      bgAlt: getCSSVar("--bg-alt"),
+      text: getCSSVar("--text"),
+      sub: getCSSVar("--sub"),
+      accent: getCSSVar("--accent"),
+      error: getCSSVar("--error"),
+      warn: getCSSVar("--warn"),
+    }),
+    // greenText swaps --text/--sub on <body>, so re-read when it flips
+    [themeVersion, settings.greenText] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
-  // Win animation: sequential flash along greenChain
+  // ── Camera ───────────────────────────────────────────────────────────────
+  const animateTo = useCallback((rawTarget: View) => {
+    if (tweenRef.current) cancelAnimationFrame(tweenRef.current);
+    const target = clampView(rawTarget);
+    const from = viewRef.current;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / TWEEN_MS);
+      const k = ease(t);
+      setView({
+        center: [
+          from.center[0] + (target.center[0] - from.center[0]) * k,
+          from.center[1] + (target.center[1] - from.center[1]) * k,
+        ],
+        zoom: from.zoom + (target.zoom - from.zoom) * k,
+      });
+      tweenRef.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    tweenRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => () => {
+    if (tweenRef.current) cancelAnimationFrame(tweenRef.current);
+  }, []);
+
+  const routeCodes = useMemo(
+    () => [startCode, endCode, ...guesses.map((g) => g.code)],
+    [startCode, endCode, guesses]
+  );
+
+  const fitRoute = useCallback(() => {
+    setFollow(true);
+    animateTo(fitView(routeCodes, AUTO_FIT_MAX));
+  }, [routeCodes, animateTo]);
+
+  // Frame the route on load and after every guess (unless the player has
+  // taken the camera themselves — FIT hands it back).
+  useEffect(() => {
+    if (follow) animateTo(fitView(routeCodes, AUTO_FIT_MAX));
+  }, [routeCodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleMoveStart = useCallback(() => {
+    if (tweenRef.current) {
+      cancelAnimationFrame(tweenRef.current);
+      tweenRef.current = null;
+    }
+  }, []);
+
+  const handleMoveEnd = useCallback((pos: { coordinates: [number, number]; zoom: number }) => {
+    const prev = viewRef.current;
+    const moved =
+      Math.abs(pos.zoom - prev.zoom) > 0.01 ||
+      Math.abs(pos.coordinates[0] - prev.center[0]) > 0.5 ||
+      Math.abs(pos.coordinates[1] - prev.center[1]) > 0.5;
+    if (moved) setFollow(false);
+    setView({ center: pos.coordinates, zoom: pos.zoom });
+  }, []);
+
+  function zoomBy(f: number) {
+    setFollow(false);
+    const z = viewRef.current.zoom;
+    animateTo({ center: viewRef.current.center, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z * f)) });
+  }
+
+  // ── Win animation: light the chain up one country at a time ─────────────
   useEffect(() => {
     if (status !== "won") return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     greenChain.forEach((code, i) => {
-      timers.push(setTimeout(() => setWinLit((p) => new Set(Array.from(p).concat(code))), i * 150));
-      timers.push(setTimeout(() => {
-        setWinLit((p) => { const n = new Set(p); n.delete(code); return n; });
-      }, i * 150 + 400));
+      timers.push(setTimeout(() => setWinLit((p) => new Set(Array.from(p).concat(code))), i * 140));
     });
-    timers.push(setTimeout(() => setWinLit(new Set(greenChain)), greenChain.length * 150 + 450));
     return () => timers.forEach(clearTimeout);
   }, [status, greenChain]);
 
-  // Pulse end-country border
-  useEffect(() => {
-    const id = setInterval(() => setEndPulse((p) => !p), 700);
-    return () => clearInterval(id);
-  }, []);
-
-  // Guess color map (last status per country)
+  // ── Per-country styling ──────────────────────────────────────────────────
   const guessColorMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const g of guesses) {
-      if (g.color === "green")       m.set(g.code, FILL_ACCENT);
-      else if (g.color === "orange") m.set(g.code, colors.warn);
-      else if (g.color === "grey")   m.set(g.code, FILL_GREY);
+      m.set(g.code, g.color === "green" ? colors.accent : g.color === "orange" ? colors.warn : colors.sub);
     }
     return m;
-  }, [guesses, FILL_ACCENT, FILL_GREY, colors.warn]);
+  }, [guesses, colors]);
 
   const optimalSet = useMemo(() => new Set(optimalPath), [optimalPath]);
+  const gameOver = status === "won" || status === "lost";
 
-  const sw = parseFloat((1.2 / zoom).toFixed(3));
-
-  function getStyle(a2: string | undefined): { fill: string; stroke: string; strokeWidth: number } {
-    if (!a2) return { fill: FILL_DIM, stroke: STROKE_DIM, strokeWidth: sw };
-
-    if (winLit.has(a2)) return { fill: FILL_TEXT, stroke: FILL_ACCENT, strokeWidth: sw * 1.5 };
-
-    if (a2 === startCode) return { fill: FILL_TEXT, stroke: `${colors.text}bb`, strokeWidth: sw };
-
-    if (a2 === endCode) {
-      const guessedFill = guessColorMap.get(a2);
-      return {
-        fill: guessedFill ?? FILL_DIM,
-        stroke: endPulse ? colors.warn : `${colors.warn}40`,
-        strokeWidth: endPulse ? sw * 2.5 : sw,
-      };
-    }
-
-    const gc = guessColorMap.get(a2);
-    if (gc) return { fill: gc, stroke: STROKE_DIM, strokeWidth: sw };
-
-    if (status === "lost" && optimalSet.has(a2)) {
-      return { fill: FILL_REVEAL, stroke: STROKE_REVEAL, strokeWidth: sw * 1.5 };
-    }
-
-    return { fill: FILL_DIM, stroke: STROKE_DEF, strokeWidth: sw };
-  }
-
-  const handleMoveEnd = useCallback(
-    (pos: { coordinates: [number, number]; zoom: number }) => {
-      setCenter(pos.coordinates);
-      setZoom(pos.zoom);
-    },
-    []
+  /** Countries whose names may be shown on hover */
+  const revealed = useCallback(
+    (code: string) => gameOver || code === startCode || code === endCode || guessColorMap.has(code),
+    [gameOver, startCode, endCode, guessColorMap]
   );
 
-  function zoomIn()  { setZoom((z) => Math.min(MAX_ZOOM, parseFloat((z * 2).toFixed(2)))); }
-  function zoomOut() { setZoom((z) => Math.max(MIN_ZOOM, parseFloat((z / 2).toFixed(2)))); }
-  function reset()   { setZoom(1); setCenter(DEFAULT_CENTER); }
+  const styleFor = useCallback(
+    (a2: string | undefined): { fill: string; stroke: string; strokeWidth: number; className?: string } => {
+      const base = { fill: colors.bgAlt, stroke: `${colors.sub}aa`, strokeWidth: 0.6 };
+      if (!a2) return { ...base, stroke: `${colors.sub}55` };
+      if (winLit.has(a2)) return { fill: colors.accent, stroke: colors.text, strokeWidth: 1.2 };
+      if (a2 === startCode) return { fill: colors.text, stroke: colors.text, strokeWidth: 1 };
+      if (a2 === endCode) {
+        return { fill: "url(#travle-target-hatch)", stroke: colors.warn, strokeWidth: 1.8, className: "map-pulse" };
+      }
+      const gc = guessColorMap.get(a2);
+      if (gc) return { fill: gc, stroke: colors.bg, strokeWidth: 0.6 };
+      if (status === "lost" && optimalSet.has(a2)) {
+        return { fill: `${colors.accent}40`, stroke: colors.accent, strokeWidth: 1.2 };
+      }
+      return base;
+    },
+    [colors, winLit, startCode, endCode, guessColorMap, status, optimalSet]
+  );
 
-  const btnBase: React.CSSProperties = {
-    background: `${colors.bg}ee`,
+  // Pointer → tooltip position inside the wrapper
+  const trackPointer = useCallback(
+    (code: string | undefined, e: React.MouseEvent) => {
+      if (!code || !revealed(code) || !wrapRef.current) {
+        setHover(null);
+        return;
+      }
+      const r = wrapRef.current.getBoundingClientRect();
+      setHover({ code, x: e.clientX - r.left, y: e.clientY - r.top });
+    },
+    [revealed]
+  );
+
+  // The country layer doesn't depend on zoom (strokes are non-scaling),
+  // so it's memoised and skipped while the camera animates.
+  const countryLayer = useMemo(
+    () => (
+      <Geographies geography={worldTopojson as object}>
+        {({ geographies }) =>
+          geographies.map((geo) => {
+            const a2 = TOPO_NAME_TO_ALPHA2[geo.properties.name as string];
+            const s = styleFor(a2);
+            const shared = {
+              fill: s.fill,
+              stroke: s.stroke,
+              strokeWidth: s.strokeWidth,
+              outline: "none",
+              vectorEffect: "non-scaling-stroke" as const,
+              transition: "fill 250ms ease",
+            };
+            const canHover = a2 && revealed(a2);
+            return (
+              <Geography
+                key={geo.rsmKey}
+                geography={geo}
+                className={s.className}
+                onMouseMove={(e: React.MouseEvent) => trackPointer(a2, e)}
+                onMouseLeave={() => setHover(null)}
+                style={{
+                  default: shared,
+                  hover: { ...shared, stroke: canHover ? colors.text : s.stroke, strokeWidth: canHover ? 1.4 : s.strokeWidth },
+                  pressed: { ...shared },
+                }}
+              />
+            );
+          })
+        }
+      </Geographies>
+    ),
+    [styleFor, revealed, trackPointer, colors]
+  );
+
+  // ── Route network: every border between countries you've linked up ───────
+  const linked = useMemo(() => {
+    const set = connectedComponent(guesses.map((g) => g.code), startCode, endCode, ocean);
+    if (status === "won") set.add(endCode);
+    return Array.from(set);
+  }, [guesses, startCode, endCode, ocean, status]);
+
+  const hops = useMemo(() => {
+    const out: { key: string; from: [number, number]; to: [number, number]; sea: boolean }[] = [];
+    for (let i = 0; i < linked.length; i++) {
+      for (let j = i + 1; j < linked.length; j++) {
+        const a = linked[i];
+        const b = linked[j];
+        if (!getNeighbors(a, ocean).includes(b)) continue;
+        const ends = hopEndpoints(a, b);
+        if (!ends) continue;
+        const land = COUNTRY_MAP.get(a)?.neighbors.includes(b) ?? false;
+        out.push({ key: `${a}-${b}`, from: ends[0], to: ends[1], sea: !land && isSeaLink(a, b) });
+      }
+    }
+    return out;
+  }, [linked, ocean]);
+
+  const z = view.zoom;
+  const u = px / z; // one screen pixel, in map units at the current zoom
+  const labelSize = 11 * u;
+  const startGeo = COUNTRY_GEO.get(startCode);
+  const endGeo = COUNTRY_GEO.get(endCode);
+
+  const btn: React.CSSProperties = {
+    background: `${colors.bg}e6`,
     border: `1px solid ${colors.sub}`,
-    color: colors.sub,
+    color: colors.text,
     fontFamily: "inherit",
     cursor: "pointer",
+    height: 26,
+    minWidth: 26,
+    padding: "0 7px",
+    fontSize: "0.75rem",
+    lineHeight: 1,
   };
 
   return (
-    <div style={{ width: "100%", position: "relative" }}>
-      {/* Zoom controls */}
-      <div style={{ position: "absolute", top: 6, right: 6, zIndex: 10, display: "flex", gap: 4, alignItems: "center" }}>
-        {zoom > 1 && (
-          <button onClick={reset} style={{ ...btnBase, padding: "1px 6px", fontSize: "0.65rem", letterSpacing: "0.05em" }}>
-            RESET
-          </button>
-        )}
-        <button onClick={zoomOut} disabled={zoom <= MIN_ZOOM} style={{ ...btnBase, color: zoom <= MIN_ZOOM ? `${colors.sub}44` : colors.sub, width: 22, height: 22, fontSize: "1rem", lineHeight: "1" }}>−</button>
-        <span style={{ ...btnBase, padding: "1px 5px", fontSize: "0.65rem", minWidth: 32, textAlign: "center", cursor: "default" }}>
-          {zoom.toFixed(1)}x
-        </span>
-        <button onClick={zoomIn} disabled={zoom >= MAX_ZOOM} style={{ ...btnBase, color: zoom >= MAX_ZOOM ? `${colors.sub}44` : colors.sub, width: 22, height: 22, fontSize: "1rem", lineHeight: "1" }}>+</button>
+    <div ref={wrapRef} style={{ width: "100%", position: "relative" }}>
+      {/* Controls */}
+      <div className="map-controls">
+        <button onClick={fitRoute} style={{ ...btn, color: follow ? colors.accent : colors.text }} title="Frame the route">
+          FIT
+        </button>
+        <button onClick={() => { setFollow(false); animateTo(WORLD_VIEW); }} style={btn} title="Whole world">
+          WORLD
+        </button>
+        <button onClick={() => zoomBy(0.5)} disabled={z <= MIN_ZOOM + 0.01} style={btn} aria-label="Zoom out">−</button>
+        <button onClick={() => zoomBy(2)} disabled={z >= MAX_ZOOM - 0.01} style={btn} aria-label="Zoom in">+</button>
       </div>
 
       <ComposableMap
         projection="geoEqualEarth"
-        projectionConfig={{ scale: 155 }}
-        width={800}
-        height={400}
-        style={{ width: "100%", height: "auto", display: "block" }}
+        projectionConfig={{ scale: MAP_SCALE }}
+        width={MAP_WIDTH}
+        height={MAP_HEIGHT}
+        style={{ width: "100%", height: "auto", display: "block", background: colors.bg }}
       >
-        <ZoomableGroup zoom={zoom} center={center} minZoom={MIN_ZOOM} maxZoom={MAX_ZOOM} onMoveEnd={handleMoveEnd}>
-          <Geographies geography={worldTopojson as object}>
-            {({ geographies }) =>
-              geographies.map((geo) => {
-                const a2 = TOPO_NAME_TO_ALPHA2[geo.properties.name as string];
-                const s  = getStyle(a2);
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    style={{
-                      default: { fill: s.fill, stroke: s.stroke, strokeWidth: s.strokeWidth, outline: "none" },
-                      hover:   { fill: s.fill, stroke: s.stroke, strokeWidth: s.strokeWidth, outline: "none", cursor: "grab" },
-                      pressed: { fill: s.fill, outline: "none", cursor: "grabbing" },
-                    }}
-                  />
-                );
-              })
-            }
-          </Geographies>
+        <defs>
+          <pattern id="travle-target-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
+            <rect width="4" height="4" fill={`${colors.warn}33`} />
+            <line x1="0" y1="0" x2="0" y2="4" stroke={colors.warn} strokeWidth="1.6" />
+          </pattern>
+        </defs>
+        <ZoomableGroup
+          zoom={view.zoom}
+          center={view.center}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onMoveStart={handleMoveStart}
+          onMoveEnd={handleMoveEnd}
+          filterZoomEvent={zoomFilter}
+        >
+          <Sphere id="travle-sphere" fill={colors.bg} stroke={`${colors.sub}66`} strokeWidth={0.6} />
+          <Graticule stroke={`${colors.sub}26`} strokeWidth={0.5} style={{ vectorEffect: "non-scaling-stroke" } as React.CSSProperties} />
 
-          {/* Microstate dot markers */}
-          {MICROSTATES.map(({ code, label, coordinates }) => {
-            const s = getStyle(code);
-            const r = Math.max(2, 5 / zoom);
+          {countryLayer}
+
+          {/* Route lines: dark casing underneath so they read on any fill */}
+          {hops.map((h) => (
+            <Line
+              key={`${h.key}-case`}
+              from={h.from}
+              to={h.to}
+              stroke={colors.bg}
+              strokeWidth={4}
+              strokeOpacity={0.7}
+              strokeLinecap="round"
+              style={{ vectorEffect: "non-scaling-stroke", pointerEvents: "none" } as React.CSSProperties}
+            />
+          ))}
+          {hops.map((h) => (
+            <Line
+              key={h.key}
+              from={h.from}
+              to={h.to}
+              stroke={colors.text}
+              strokeWidth={1.6}
+              strokeLinecap="round"
+              strokeDasharray={h.sea ? "3 4" : undefined}
+              style={{ vectorEffect: "non-scaling-stroke", pointerEvents: "none" } as React.CSSProperties}
+            />
+          ))}
+          {linked.map((code) => {
+            const g = COUNTRY_GEO.get(code);
+            if (!g) return null;
             return (
-              <Marker key={code} coordinates={coordinates}>
-                <circle r={r} fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeWidth} />
-                {zoom >= 3 && (
-                  <text
-                    textAnchor="middle"
-                    y={-r - 2}
-                    style={{ fontSize: 3 / zoom + "px", fill: s.fill, pointerEvents: "none" }}
-                  >
-                    {label}
-                  </text>
-                )}
+              <Marker key={`node-${code}`} coordinates={g.anchor} style={{ default: { pointerEvents: "none" } }}>
+                <circle r={2.8 * u} fill={colors.text} stroke={colors.bg} strokeWidth={1.2 * u} />
               </Marker>
             );
           })}
+
+          {/* Small countries the 110m map can't draw */}
+          {Object.entries(MARKER_COUNTRIES).map(([code, coordinates]) => {
+            const s = styleFor(code);
+            const plain = s.fill === colors.bgAlt;
+            const r = (plain ? 2.4 : 3.6) * u;
+            const fill = s.fill.startsWith("url(") ? `${colors.warn}88` : s.fill;
+            return (
+              <Marker
+                key={code}
+                coordinates={coordinates}
+                onMouseMove={(e: React.MouseEvent) => trackPointer(code, e)}
+                onMouseLeave={() => setHover(null)}
+              >
+                <circle
+                  r={r}
+                  className={s.className}
+                  fill={plain ? "none" : fill}
+                  stroke={plain ? `${colors.sub}` : s.stroke}
+                  strokeWidth={(plain ? 0.8 : 1.2) * u}
+                />
+              </Marker>
+            );
+          })}
+
+          {/* Start / target labels */}
+          {startGeo && (
+            <Marker coordinates={startGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
+              <text className="map-label" y={-9 * u} textAnchor="middle" style={{ fontSize: labelSize, fill: colors.text, stroke: colors.bg, strokeWidth: 3 * u }}>
+                {nameOf(startCode)}
+              </text>
+            </Marker>
+          )}
+          {endGeo && (
+            <Marker coordinates={endGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
+              <text className="map-label" y={-9 * u} textAnchor="middle" style={{ fontSize: labelSize, fill: colors.warn, stroke: colors.bg, strokeWidth: 3 * u }}>
+                ◎ {nameOf(endCode)}
+              </text>
+            </Marker>
+          )}
         </ZoomableGroup>
       </ComposableMap>
 
+      {/* Hover tooltip */}
+      {hover && (
+        <div
+          className="map-tooltip"
+          style={{
+            left: Math.min(hover.x + 12, (wrapRef.current?.clientWidth ?? 0) - 150),
+            top: hover.y + 14,
+            borderColor: guessColorMap.get(hover.code) ?? (hover.code === endCode ? colors.warn : colors.sub),
+          }}
+        >
+          {nameOf(hover.code)}
+          {hover.code === startCode && <span style={{ color: colors.sub }}> · start</span>}
+          {hover.code === endCode && <span style={{ color: colors.warn }}> · target</span>}
+        </div>
+      )}
+
       {/* Legend */}
-      <div style={{ display: "flex", gap: 12, fontSize: "0.65rem", color: colors.sub, padding: "4px 2px 0", flexWrap: "wrap" }}>
-        <span><span style={{ color: FILL_TEXT   }}>■</span> START</span>
-        <span><span style={{ color: colors.warn      }}>■</span> TARGET</span>
-        <span><span style={{ color: FILL_ACCENT }}>■</span> ON PATH</span>
-        <span><span style={{ color: colors.warn      }}>■</span> DETOUR</span>
-        <span><span style={{ color: FILL_GREY   }}>■</span> OFF TRACK</span>
-        {status === "lost" && <span><span style={{ color: colors.accent }}>■</span> OPTIMAL PATH</span>}
-        <span style={{ marginLeft: "auto", color: `${colors.sub}88` }}>DRAG TO PAN</span>
+      <div className="map-legend" style={{ color: colors.sub }}>
+        <span><i style={{ background: colors.text }} /> START</span>
+        <span><i className="hatch" /> TARGET</span>
+        <span><i style={{ background: colors.accent }} /> ON PATH</span>
+        <span><i style={{ background: colors.warn }} /> DETOUR</span>
+        <span><i style={{ background: colors.sub }} /> OFF TRACK</span>
+        <span><b style={{ color: colors.text }}>─</b> LINKED</span>
+        {ocean && <span><b style={{ color: colors.text }}>╌</b> SEA HOP</span>}
+        {status === "lost" && <span><i style={{ background: `${colors.accent}40`, outline: `1px solid ${colors.accent}` }} /> BEST ROUTE</span>}
+        <span className="map-hint">DRAG · CTRL+SCROLL / PINCH TO ZOOM</span>
       </div>
     </div>
   );

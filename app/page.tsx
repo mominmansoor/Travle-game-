@@ -10,7 +10,7 @@ import ThemeSelector from "@/components/ThemeSelector";
 import { useSettings } from "@/components/SettingsProvider";
 import { generatePuzzle, getSessionSeed, getTodayString, levelSeed } from "@/data/puzzles";
 import { COUNTRY_MAP } from "@/data/countries";
-import { evaluateGuess, findConnectedPath } from "@/lib/bfs";
+import { connectedComponent, evaluateGuess, findConnectedPath, nextStop } from "@/lib/bfs";
 import { isSeaLink } from "@/data/seaLinks";
 import {
   initLevelState,
@@ -23,10 +23,27 @@ import {
 import audio from "@/lib/audio";
 
 const LEVEL_LABELS = ["EASY", "MEDIUM", "HARD", "EXPERT", "NIGHTMARE"];
+const HELP_SEEN_KEY = "travle_help_seen";
 
-function maxGuesses(pathLength: number) {
-  return pathLength + 5;
+function maxGuesses(state: LevelState) {
+  return state.pathLength + 5 - (state.hintsUsed ?? 0);
 }
+
+const nameOf = (code: string) => COUNTRY_MAP.get(code)?.name ?? code;
+
+/** "France → Spain ~> Morocco" — sea hops get a wavy arrow */
+function routeText(codes: string[], ocean: boolean) {
+  return codes
+    .map((c, i) => {
+      if (i === 0) return nameOf(c);
+      const prev = codes[i - 1];
+      const sea = ocean && isSeaLink(prev, c) && !(COUNTRY_MAP.get(prev)?.neighbors ?? []).includes(c);
+      return `${sea ? " ~> " : " → "}${nameOf(c)}`;
+    })
+    .join("");
+}
+
+type Panel = "none" | "help" | "stats" | "themes" | "settings";
 
 export default function Home() {
   const today = getTodayString();
@@ -37,9 +54,7 @@ export default function Home() {
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [levelStates, setLevelStates] = useState<(LevelState | null)[]>(Array(5).fill(null));
   const [puzzleIdxs, setPuzzleIdxs] = useState<number[]>([0, 0, 0, 0, 0]);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const [showThemes, setShowThemes] = useState(false);
+  const [panel, setPanel] = useState<Panel>("none");
   const [shareMsg, setShareMsg] = useState("");
   const [guessError, setGuessError] = useState("");
 
@@ -47,6 +62,12 @@ export default function Home() {
 
   useEffect(() => {
     setSessionSeed(getSessionSeed());
+    try {
+      if (!localStorage.getItem(HELP_SEEN_KEY)) {
+        setPanel("help");
+        localStorage.setItem(HELP_SEEN_KEY, "1");
+      }
+    } catch {}
   }, []);
 
   // (Re)build all five levels whenever the session starts or the
@@ -66,13 +87,20 @@ export default function Home() {
   }, [sessionSeed, ocean]);
 
   const currentState = levelStates[activeLevel - 1];
-  const startName = currentState ? (COUNTRY_MAP.get(currentState.startCode)?.name ?? currentState.startCode) : "";
-  const endName = currentState ? (COUNTRY_MAP.get(currentState.endCode)?.name ?? currentState.endCode) : "";
+  const startName = currentState ? nameOf(currentState.startCode) : "";
+  const endName = currentState ? nameOf(currentState.endCode) : "";
+  const levelOcean = currentState?.oceanCrossings ?? false;
 
   /** Countries that can't be entered: the start, plus anything already guessed. */
   const usedCodes = new Set<string>(
     currentState ? [currentState.startCode, ...currentState.guesses.map((g) => g.code)] : []
   );
+
+  function updateCurrent(next: LevelState) {
+    const copy = [...levelStates];
+    copy[activeLevel - 1] = next;
+    setLevelStates(copy);
+  }
 
   function handleGuess(code: string, name: string): boolean {
     if (!currentState || currentState.status !== "playing") return false;
@@ -89,11 +117,14 @@ export default function Home() {
     }
     setGuessError("");
 
-    const levelOcean = currentState.oceanCrossings ?? false;
-
-    // Last country in the green chain is the "current position" for coloring
-    const lastGreen = currentState.greenChain[currentState.greenChain.length - 1];
-    const color = evaluateGuess(code, lastGreen, currentState.endCode, levelOcean);
+    // Colour is judged from everything already linked to the start
+    const chain = connectedComponent(
+      currentState.guesses.map((g) => g.code),
+      currentState.startCode,
+      currentState.endCode,
+      levelOcean
+    );
+    const color = evaluateGuess(code, chain, currentState.endCode, levelOcean);
 
     if (color === "green")       audio.greenGuess();
     else if (color === "orange") audio.orangeGuess();
@@ -102,11 +133,8 @@ export default function Home() {
     const guess: Guess = { code, name, color };
     const newGuesses = [...currentState.guesses, guess];
 
-    // Green chain only grows on GREEN guesses (used for map highlight + history display)
     const newGreenChain =
-      color === "green"
-        ? [...currentState.greenChain, code]
-        : currentState.greenChain;
+      color === "green" ? [...currentState.greenChain, code] : currentState.greenChain;
 
     // Win: any connected path from start to end exists through guessed countries
     const connectedPath = findConnectedPath(
@@ -116,23 +144,17 @@ export default function Home() {
       levelOcean
     );
     const won = connectedPath !== null;
-    // Use the connected path as greenChain for win animation if found
     const finalGreenChain = won ? connectedPath! : newGreenChain;
 
-    // Lose: all guesses used up without completing the chain
-    const lost = !won && newGuesses.length >= maxGuesses(currentState.pathLength);
+    const lost = !won && newGuesses.length >= maxGuesses(currentState);
     const newStatus = won ? "won" : lost ? "lost" : "playing";
 
-    const newState: LevelState = {
+    updateCurrent({
       ...currentState,
       guesses: newGuesses,
       greenChain: finalGreenChain,
       status: newStatus,
-    };
-
-    const newLevelStates = [...levelStates];
-    newLevelStates[activeLevel - 1] = newState;
-    setLevelStates(newLevelStates);
+    });
 
     if (newStatus === "won") {
       audio.win();
@@ -146,167 +168,148 @@ export default function Home() {
     return true;
   }
 
+  // ── Hints ──────────────────────────────────────────────────────────────
+  const hintTarget = currentState?.status === "playing"
+    ? nextStop(currentState.guesses.map((g) => g.code), currentState.startCode, currentState.endCode, levelOcean)
+    : null;
+  const activeHint =
+    currentState?.hintCode && currentState.hintCode === hintTarget ? currentState.hintLevel ?? 0 : 0;
+  const guessesLeft = currentState ? maxGuesses(currentState) - currentState.guesses.length : 0;
+  const canHint = !!hintTarget && activeHint < 2 && guessesLeft > 1;
+
+  function handleHint() {
+    if (!currentState || !hintTarget || !canHint) return;
+    audio.menuNav();
+    updateCurrent({
+      ...currentState,
+      hintsUsed: (currentState.hintsUsed ?? 0) + 1,
+      hintCode: hintTarget,
+      hintLevel: activeHint + 1,
+    });
+  }
+
   function handleShare() {
     if (!currentState || (currentState.status !== "won" && currentState.status !== "lost")) return;
     const str = buildShareString(
       activeLevel,
       currentState.guesses,
       currentState.status,
-      currentState.pathLength
+      currentState.pathLength,
+      currentState.hintsUsed ?? 0
     );
     navigator.clipboard.writeText(str).catch(() => {});
     setShareMsg("COPIED!");
     setTimeout(() => setShareMsg(""), 2000);
   }
 
-  function handleReset() {
-    const curIdx = puzzleIdxs[activeLevel - 1];
-    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, curIdx), activeLevel, ocean);
+  function loadPuzzle(idx: number) {
+    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, idx), activeLevel, ocean);
     if (!puzzle) return;
     const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength, ocean);
+    const newPuzzleIdxs = [...puzzleIdxs];
+    newPuzzleIdxs[activeLevel - 1] = idx;
+    setPuzzleIdxs(newPuzzleIdxs);
+    updateCurrent(fresh);
     setGuessError("");
-    const newLevelStates = [...levelStates];
-    newLevelStates[activeLevel - 1] = fresh;
-    setLevelStates(newLevelStates);
   }
 
-  function handleNext() {
-    const nextIdx = puzzleIdxs[activeLevel - 1] + 1;
-    const puzzle = generatePuzzle(levelSeed(sessionSeed, activeLevel, nextIdx), activeLevel, ocean);
-    if (!puzzle) return;
-    const fresh = initLevelState("session", activeLevel, puzzle.start, puzzle.end, puzzle.optimalPath, puzzle.pathLength, ocean);
-    setGuessError("");
-    const newPuzzleIdxs = [...puzzleIdxs];
-    newPuzzleIdxs[activeLevel - 1] = nextIdx;
-    setPuzzleIdxs(newPuzzleIdxs);
-    const newLevelStates = [...levelStates];
-    newLevelStates[activeLevel - 1] = fresh;
-    setLevelStates(newLevelStates);
-  }
+  const handleReset = () => loadPuzzle(puzzleIdxs[activeLevel - 1]);
+  const handleNext = () => loadPuzzle(puzzleIdxs[activeLevel - 1] + 1);
 
   function switchLevel(level: number) {
     setActiveLevel(level);
     setGuessError("");
     audio.menuNav();
-    setShowSettings(false);
-    setShowStats(false);
+    setPanel("none");
+  }
+
+  function togglePanel(p: Panel) {
+    setPanel((cur) => (cur === p ? "none" : p));
+    audio.menuNav();
   }
 
   const totalGuesses = currentState?.guesses.length ?? 0;
-  const guessMax     = currentState ? maxGuesses(currentState.pathLength) : 0;
-  const efficiency   = currentState && totalGuesses > 0
-    ? Math.round((currentState.pathLength / totalGuesses) * 100)
+  const guessMax = currentState ? maxGuesses(currentState) : 0;
+  // A route of N hops needs N − 1 countries in between
+  const minGuesses = currentState ? Math.max(1, currentState.pathLength - 1) : 1;
+  const efficiency = currentState && totalGuesses > 0
+    ? Math.min(100, Math.round((minGuesses / totalGuesses) * 100))
     : 0;
   const stats = loadStats();
+  const hintsUsed = currentState?.hintsUsed ?? 0;
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center"
-      style={{ padding: "16px", maxWidth: "720px", margin: "0 auto" }}
-    >
+    <div className="app-shell">
       {/* ── Header ── */}
-      <div
-        className="w-full flex items-center justify-between mb-4"
-        style={{ borderBottom: "1px solid var(--border)", paddingBottom: "8px" }}
-      >
-        <div>
-          <span style={{ color: "var(--green)", fontSize: "1.1rem", letterSpacing: "0.15em" }}>
-            TRAVLE.EXE
-          </span>
-          <span style={{ color: "var(--dim)", marginLeft: "12px", fontSize: "0.75rem" }}>
-            {today}
-          </span>
+      <header className="app-header">
+        <div className="flex items-baseline gap-3">
+          <span className="brand cursor-inline">TRAVLE.EXE</span>
+          <span className="date">{today}</span>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setShowStats(!showStats);
-              setShowSettings(false);
-              setShowThemes(false);
-              audio.menuNav();
-            }}
-            style={{
-              color: showStats ? "var(--green)" : "var(--dim)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-            }}
-          >
-            [STATS]
-          </button>
-          <button
-            onClick={() => {
-              setShowThemes(!showThemes);
-              setShowSettings(false);
-              setShowStats(false);
-              audio.menuNav();
-            }}
-            style={{
-              color: showThemes ? "var(--green)" : "var(--dim)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-            }}
-          >
-            [THEME]
-          </button>
-          <button
-            onClick={() => {
-              setShowSettings(!showSettings);
-              setShowStats(false);
-              setShowThemes(false);
-              audio.menuNav();
-            }}
-            style={{
-              color: showSettings ? "var(--green)" : "var(--dim)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-            }}
-          >
-            [CFG]
-          </button>
-        </div>
-      </div>
+        <nav className="flex gap-3">
+          {(
+            [
+              ["help", "[?]"],
+              ["stats", "[STATS]"],
+              ["themes", "[THEME]"],
+              ["settings", "[CFG]"],
+            ] as [Panel, string][]
+          ).map(([p, label]) => (
+            <button key={p} className={`nav-btn ${panel === p ? "on" : ""}`} onClick={() => togglePanel(p)}>
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* ── How to play ── */}
+      {panel === "help" && (
+        <Terminal title="HOW TO PLAY" className="mb-4">
+          <div className="help">
+            <p>
+              Get from <b style={{ color: "var(--text)" }}>the start</b> to <b style={{ color: "var(--warn)" }}>the target</b>{" "}
+              by naming the countries in between. Each one needs to share a border with something you&apos;ve already linked up.
+            </p>
+            <ul>
+              <li><span style={{ color: "var(--accent)" }}>■ green</span> touches your chain and gets you one step closer</li>
+              <li><span style={{ color: "var(--warn)" }}>■ orange</span> a detour, up to 2 steps off the best route</li>
+              <li><span style={{ color: "var(--sub)" }}>■ grey</span> way off, or doesn&apos;t connect at all</li>
+            </ul>
+            <p>
+              You get the shortest route + 5 guesses, and each country can only be entered once. Stuck? <b>[HINT]</b> shows
+              the next stop, but burns a guess. Turn on <b>ocean crossings</b> in [CFG] to hop straits and islands
+              (yes, Alaska → Russia works).
+            </p>
+            <div style={{ textAlign: "right" }}>
+              <button className="tbtn primary" onClick={() => setPanel("none")}>[ GOT IT ]</button>
+            </div>
+          </div>
+        </Terminal>
+      )}
 
       {/* ── Settings panel ── */}
-      {showSettings && (
-        <Terminal title="SETTINGS" className="w-full mb-4">
+      {panel === "settings" && (
+        <Terminal title="SETTINGS" className="mb-4">
           <div className="flex flex-col gap-3" style={{ fontSize: "0.85rem" }}>
             {(
               [
-                { key: "scanlines", label: "SCANLINES" },
+                { key: "oceanCrossings", label: "OCEAN CROSSINGS", hint: "straits + islands count as borders · rebuilds puzzles" },
                 { key: "sounds", label: "SOUNDS" },
+                { key: "scanlines", label: "SCANLINES" },
                 { key: "greenText", label: "GREEN TEXT MODE" },
-                {
-                  key: "oceanCrossings",
-                  label: "OCEAN CROSSINGS",
-                  hint: "straits + islands count as borders (new puzzles)",
-                },
               ] as { key: keyof typeof settings; label: string; hint?: string }[]
             ).map(({ key, label, hint }) => (
-              <div key={key} className="flex items-center justify-between">
-                <span style={{ color: "var(--dim)" }}>
+              <div key={key} className="flex items-center justify-between gap-4">
+                <span style={{ color: "var(--text)" }}>
                   {label}
-                  {hint && (
-                    <span style={{ display: "block", fontSize: "0.65rem", color: "var(--grey)" }}>
-                      {hint}
-                    </span>
-                  )}
+                  {hint && <span className="setting-hint">{hint}</span>}
                 </span>
                 <button
+                  role="switch"
+                  aria-checked={settings[key]}
                   onClick={() => updateSettings({ [key]: !settings[key] })}
-                  style={{
-                    color: settings[key] ? "var(--green)" : "var(--grey)",
-                    background: "none",
-                    border: "1px solid var(--border)",
-                    cursor: "pointer",
-                    padding: "2px 8px",
-                    fontSize: "0.75rem",
-                  }}
+                  className={`tbtn ${settings[key] ? "primary" : ""}`}
+                  style={{ minWidth: 56 }}
                 >
                   {settings[key] ? "[ON ]" : "[OFF]"}
                 </button>
@@ -321,37 +324,31 @@ export default function Home() {
       )}
 
       {/* ── Stats panel ── */}
-      {showStats && (
-        <Terminal title="STATISTICS" className="w-full mb-4">
-          <div style={{ fontSize: "0.8rem", marginBottom: "12px" }}>
-            <div className="flex gap-6" style={{ color: "var(--dim)", flexWrap: "wrap" }}>
-              <span>
-                PLAYED: <span style={{ color: "var(--fg)" }}>{stats.totalPlayed}</span>
-              </span>
-              <span>
-                WON: <span style={{ color: "var(--green)" }}>{stats.totalWon}</span>
-              </span>
-              <span>
-                STREAK: <span style={{ color: "var(--orange)" }}>{stats.currentStreak}</span>
-              </span>
-              <span>
-                BEST: <span style={{ color: "var(--orange)" }}>{stats.bestStreak}</span>
-              </span>
+      {panel === "stats" && (
+        <Terminal title="STATISTICS" className="mb-4">
+          <div className="stat-grid">
+            <div><b>{stats.totalPlayed}</b><span>PLAYED</span></div>
+            <div><b style={{ color: "var(--green)" }}>{stats.totalWon}</b><span>WON</span></div>
+            <div>
+              <b>{stats.totalPlayed ? Math.round((stats.totalWon / stats.totalPlayed) * 100) : 0}%</b>
+              <span>WIN RATE</span>
             </div>
+            <div><b style={{ color: "var(--orange)" }}>{stats.currentStreak}</b><span>STREAK</span></div>
+            <div><b style={{ color: "var(--orange)" }}>{stats.bestStreak}</b><span>BEST</span></div>
           </div>
           <StatsChart history={stats.dayHistory} />
         </Terminal>
       )}
 
       {/* ── Theme selector panel ── */}
-      {showThemes && (
-        <Terminal title="THEME" className="w-full mb-4">
+      {panel === "themes" && (
+        <Terminal title="THEME" className="mb-4">
           <ThemeSelector />
         </Terminal>
       )}
 
       {/* ── Level tabs ── */}
-      <div className="w-full flex gap-1 mb-3">
+      <div className="level-tabs">
         {[1, 2, 3, 4, 5].map((level) => {
           const state = levelStates[level - 1];
           const locked = level > unlockedLevel;
@@ -364,25 +361,15 @@ export default function Home() {
               key={level}
               disabled={locked}
               onClick={() => !locked && switchLevel(level)}
-              className="flex-1 py-1"
+              className={`level-tab ${active ? "active" : ""}`}
               style={{
-                fontSize: "0.7rem",
-                letterSpacing: "0.05em",
-                background: active ? "rgba(0,255,65,0.08)" : "transparent",
-                border: active ? "1px solid var(--green)" : "1px solid var(--border)",
-                color: locked
-                  ? "var(--grey)"
-                  : won
-                  ? "var(--green)"
-                  : lost
-                  ? "var(--red)"
-                  : active
-                  ? "var(--green)"
-                  : "var(--dim)",
-                cursor: locked ? "not-allowed" : "pointer",
+                color: locked ? "var(--grey)" : won ? "var(--green)" : lost ? "var(--red)" : active ? "var(--green)" : "var(--text)",
               }}
+              title={locked ? "Finish the previous level to unlock" : LEVEL_LABELS[level - 1]}
             >
-              {locked ? `L${level} --` : won ? `L${level} OK` : lost ? `L${level} XX` : `L${level}`}
+              <span>L{level}</span>
+              <span className="tab-name">{locked ? "LOCKED" : LEVEL_LABELS[level - 1]}</span>
+              <span className="tab-mark">{won ? "✓" : lost ? "✗" : locked ? "·" : ""}</span>
             </button>
           );
         })}
@@ -391,86 +378,145 @@ export default function Home() {
       {/* ── Main game area ── */}
       {currentState ? (
         <>
-          {/* Puzzle header */}
+          {/* Route header */}
           <Terminal
             title={`LEVEL ${activeLevel} — ${LEVEL_LABELS[activeLevel - 1]}`}
-            className="w-full mb-3"
+            right={levelOcean ? <span style={{ color: "var(--accent)" }}>~ OCEAN ON</span> : undefined}
+            className="mb-3"
           >
-            <div style={{ fontSize: "0.8rem" }}>
-              <div className="flex items-center gap-2 mb-2">
-                <span style={{ color: "var(--dim)" }}>ROUTE:</span>
-                <span style={{ color: "var(--fg)" }}>{startName}</span>
-                <span style={{ color: "var(--dim)" }}>→</span>
-                <span style={{ color: "var(--orange)" }}>{endName}</span>
-                {currentState.oceanCrossings && (
-                  <span style={{ color: "var(--dim)", marginLeft: "auto", fontSize: "0.7rem" }}>
-                    ~ OCEAN ON
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 flex-wrap">
-                <span style={{ color: "var(--dim)" }}>
-                  OPTIMAL:{" "}
-                  <span style={{ color: "var(--green)" }}>{currentState.pathLength}</span> steps
+            <div className="route-line">
+              <span className="route-start">{startName}</span>
+              <span className="route-arrow">──▶</span>
+              <span className="route-end">{endName}</span>
+            </div>
+
+            <div className="route-meta">
+              <span>
+                SHORTEST <b style={{ color: "var(--green)" }}>{currentState.pathLength}</b> hops
+              </span>
+              <span className="flex items-center gap-2" style={{ flex: 1 }}>
+                <span className="meter" aria-label={`${totalGuesses} of ${guessMax} guesses used`}>
+                  {Array.from({ length: currentState.pathLength + 5 }).map((_, i) => {
+                    const g = currentState.guesses[i];
+                    const burnt = i >= guessMax;
+                    return (
+                      <span
+                        key={i}
+                        style={{
+                          background: g
+                            ? g.color === "green" ? "var(--accent)" : g.color === "orange" ? "var(--warn)" : "var(--sub)"
+                            : burnt ? "transparent" : undefined,
+                          borderStyle: burnt ? "dashed" : undefined,
+                        }}
+                      />
+                    );
+                  })}
                 </span>
-                <span style={{ color: "var(--dim)" }}>
-                  GUESSES:{" "}
-                  <span
-                    style={{
-                      color:
-                        totalGuesses >= guessMax * 0.7
-                          ? "var(--orange)"
-                          : "var(--fg)",
-                    }}
-                  >
-                    {totalGuesses}
-                  </span>
-                  /{guessMax}
+                <span style={{ color: guessesLeft <= 2 && currentState.status === "playing" ? "var(--orange)" : "var(--text)", whiteSpace: "nowrap" }}>
+                  {totalGuesses}/{guessMax}
                 </span>
-                {currentState.status !== "playing" && (
-                  <span
-                    style={{
-                      color:
-                        currentState.status === "won" ? "var(--green)" : "var(--red)",
-                    }}
-                  >
-                    {currentState.status === "won" ? "✓ SOLVED" : "✗ FAILED"}
-                  </span>
+              </span>
+              <span className="flex gap-2" style={{ marginLeft: "auto" }}>
+                {currentState.status === "playing" && (
+                  <button className="tbtn" onClick={handleHint} disabled={!canHint} title="Reveal the next stop — costs one guess">
+                    [HINT]
+                  </button>
                 )}
-                <button
-                  onClick={handleReset}
-                  style={{
-                    marginLeft: "auto",
-                    color: "var(--dim)",
-                    background: "none",
-                    border: "1px solid var(--border)",
-                    cursor: "pointer",
-                    padding: "1px 7px",
-                    fontSize: "0.7rem",
-                    fontFamily: "inherit",
-                  }}
-                >
+                <button className="tbtn" onClick={handleReset} title="Restart this puzzle">
                   [RESET]
                 </button>
-              </div>
+              </span>
             </div>
+
+            {activeHint > 0 && hintTarget && (
+              <div className="hint-line">
+                💡{" "}
+                {activeHint === 1 ? (
+                  <>
+                    next stop starts with <b>&lsquo;{nameOf(hintTarget)[0]}&rsquo;</b> ({nameOf(hintTarget).replace(/[^A-Za-zÀ-ÿ]/g, "").length} letters)
+                    {canHint && <span style={{ color: "var(--sub)" }}> · hint again for the full name</span>}
+                  </>
+                ) : (
+                  <>next stop: <b>{nameOf(hintTarget)}</b></>
+                )}
+              </div>
+            )}
           </Terminal>
 
           {/* World map */}
-          <Terminal title="MAP" className="w-full mb-3" compact>
+          <Terminal title="MAP" className="mb-3" compact>
             <MapDisplay
-              key={`${activeLevel}-${puzzleIdxs[activeLevel - 1]}`}
+              key={`${activeLevel}-${puzzleIdxs[activeLevel - 1]}-${levelOcean}`}
               guesses={currentState.guesses}
               startCode={currentState.startCode}
               endCode={currentState.endCode}
               status={currentState.status}
               optimalPath={currentState.optimalPath}
               greenChain={currentState.greenChain}
+              ocean={levelOcean}
             />
           </Terminal>
 
+          {/* Input */}
+          {currentState.status === "playing" ? (
+            <div className="w-full mb-3">
+              <GuessInput onSubmit={handleGuess} excluded={usedCodes} />
+              <div className="input-foot">
+                {guessError ? (
+                  <span style={{ color: "var(--red)" }}>✗ {guessError}</span>
+                ) : (
+                  <span>
+                    {guessesLeft} guess{guessesLeft === 1 ? "" : "es"} left · press <b>/</b> to type · ↑↓ to pick
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ── Result panel ── */
+            <Terminal
+              title={currentState.status === "won" ? "PATH COMPLETE" : "GAME OVER"}
+              borderColor={currentState.status === "won" ? "var(--accent)" : "var(--error)"}
+              className="mb-3"
+            >
+              <div style={{ fontSize: "0.85rem" }}>
+                {currentState.status === "won" ? (
+                  <div className="result-grid">
+                    <div><b style={{ color: "var(--green)" }}>{minGuesses}</b><span>BEST POSSIBLE</span></div>
+                    <div><b>{totalGuesses}</b><span>YOUR GUESSES</span></div>
+                    <div>
+                      <b style={{ color: efficiency >= 80 ? "var(--green)" : efficiency >= 50 ? "var(--orange)" : "var(--red)" }}>
+                        {efficiency}%
+                      </b>
+                      <span>EFFICIENCY</span>
+                    </div>
+                    {hintsUsed > 0 && <div><b>💡{hintsUsed}</b><span>HINTS</span></div>}
+                  </div>
+                ) : (
+                  <div style={{ color: "var(--red)", letterSpacing: "0.1em", marginBottom: "8px" }}>✗ OUT OF GUESSES</div>
+                )}
+
+                <div className="route-summary">
+                  <span>{currentState.status === "won" ? "YOUR ROUTE" : "BEST ROUTE"}</span>
+                  {routeText(currentState.status === "won" ? currentState.greenChain : currentState.optimalPath, levelOcean)}
+                </div>
+
+                <div className="emoji-trail">
+                  {currentState.guesses.map((g) => (g.color === "green" ? "🟩" : g.color === "orange" ? "🟧" : "⬜")).join("")}
+                </div>
+
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <button className="tbtn primary" onClick={handleShare}>{shareMsg || "[ SHARE ]"}</button>
+                  {activeLevel < 5 && (
+                    <button className="tbtn" onClick={() => switchLevel(activeLevel + 1)}>[ NEXT LEVEL → ]</button>
+                  )}
+                  <button className="tbtn warn" onClick={handleNext}>[ NEW PUZZLE ↻ ]</button>
+                </div>
+              </div>
+            </Terminal>
+          )}
+
           {/* Guess history */}
-          <Terminal title="PATH LOG" className="w-full mb-3">
+          <Terminal title="PATH LOG" right={<span style={{ color: "var(--sub)" }}>{totalGuesses} entered</span>} className="mb-3">
             <GuessHistory
               guesses={currentState.guesses}
               startName={startName}
@@ -478,126 +524,11 @@ export default function Home() {
               greenChain={currentState.greenChain}
             />
           </Terminal>
-
-          {/* Input */}
-          {currentState.status === "playing" ? (
-            <div className="w-full mb-2">
-              <GuessInput onSubmit={handleGuess} excluded={usedCodes} />
-              {guessError && (
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--red)",
-                    marginTop: "6px",
-                    textAlign: "center",
-                  }}
-                >
-                  ✗ {guessError}
-                </div>
-              )}
-              <div
-                style={{
-                  fontSize: "0.7rem",
-                  color: "var(--dim)",
-                  marginTop: "6px",
-                  textAlign: "center",
-                }}
-              >
-                GREEN = on path &nbsp;|&nbsp; ORANGE = detour &nbsp;|&nbsp; GREY = off track{currentState.oceanCrossings ? " | ~ sea routes on" : ""}
-              </div>
-            </div>
-          ) : (
-            /* ── Result panel ── */
-            <Terminal
-              title={currentState.status === "won" ? "PATH COMPLETE" : "GAME OVER"}
-              className="w-full mb-3"
-            >
-              {currentState.status === "won" ? (
-                /* WIN screen */
-                <div style={{ fontSize: "0.85rem" }}>
-                  <div style={{ marginBottom: "10px", lineHeight: "1.8" }}>
-                    <div style={{ color: "var(--dim)" }}>
-                      optimal:{"  "}
-                      <span style={{ color: "var(--green)" }}>{currentState.pathLength}</span>
-                      {" "}countries
-                    </div>
-                    <div style={{ color: "var(--dim)" }}>
-                      your path:{" "}
-                      <span style={{ color: "var(--fg)" }}>{totalGuesses}</span>
-                      {" "}guesses
-                    </div>
-                    <div style={{ color: "var(--dim)" }}>
-                      efficiency:{" "}
-                      <span style={{ color: efficiency >= 80 ? "var(--green)" : efficiency >= 50 ? "var(--orange)" : "var(--red)" }}>
-                        {efficiency}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Emoji trail */}
-                  <div style={{ fontSize: "1.1rem", letterSpacing: "3px", marginBottom: "12px", textAlign: "center" }}>
-                    {currentState.guesses.map((g) =>
-                      g.color === "green" ? "🟩" : g.color === "orange" ? "🟧" : "⬜"
-                    ).join("")}
-                  </div>
-
-                  <div className="flex gap-2 justify-center flex-wrap">
-                    <button onClick={handleShare} style={{ color: "var(--green)", background: "none", border: "1px solid var(--green)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                      {shareMsg || "[ SHARE ]"}
-                    </button>
-                    {activeLevel < 5 && (
-                      <button onClick={() => switchLevel(activeLevel + 1)} style={{ color: "var(--dim)", background: "none", border: "1px solid var(--border)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                        [ NEXT LEVEL →]
-                      </button>
-                    )}
-                    <button onClick={handleNext} style={{ color: "var(--orange)", background: "none", border: "1px solid var(--orange)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                      [ NEW PUZZLE ↻]
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* LOSE screen */
-                <div style={{ fontSize: "0.85rem" }}>
-                  <div style={{ color: "var(--red)", letterSpacing: "0.1em", marginBottom: "8px" }}>
-                    ✗ MAX GUESSES REACHED
-                  </div>
-                  <div style={{ color: "var(--dim)", marginBottom: "4px", fontSize: "0.75rem" }}>
-                    OPTIMAL PATH:
-                  </div>
-                  <div style={{ color: "var(--dim)", fontSize: "0.75rem", marginBottom: "12px", wordBreak: "break-word" }}>
-                    {currentState.optimalPath.map((c, i) => {
-                      const name = COUNTRY_MAP.get(c)?.name ?? c;
-                      if (i === 0) return name;
-                      const prev = currentState.optimalPath[i - 1];
-                      const viaSea =
-                        currentState.oceanCrossings &&
-                        isSeaLink(prev, c) &&
-                        !(COUNTRY_MAP.get(prev)?.neighbors ?? []).includes(c);
-                      return `${viaSea ? " ~> " : " → "}${name}`;
-                    }).join("")}
-                  </div>
-                  <div className="flex gap-2 justify-center flex-wrap">
-                    <button onClick={handleShare} style={{ color: "var(--green)", background: "none", border: "1px solid var(--green)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                      {shareMsg || "[ SHARE ]"}
-                    </button>
-                    {activeLevel < 5 && (
-                      <button onClick={() => switchLevel(activeLevel + 1)} style={{ color: "var(--dim)", background: "none", border: "1px solid var(--border)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                        [ NEXT LEVEL →]
-                      </button>
-                    )}
-                    <button onClick={handleNext} style={{ color: "var(--orange)", background: "none", border: "1px solid var(--orange)", cursor: "pointer", padding: "4px 12px", fontSize: "0.8rem", fontFamily: "inherit" }}>
-                      [ NEW PUZZLE ↻]
-                    </button>
-                  </div>
-                </div>
-              )}
-            </Terminal>
-          )}
         </>
       ) : (
         <Terminal className="w-full">
           <div style={{ textAlign: "center", color: "var(--dim)", padding: "24px" }}>
-            LOADING PUZZLE...
+            LOADING PUZZLE<span className="cursor-inline" />
           </div>
         </Terminal>
       )}

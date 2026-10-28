@@ -14,7 +14,7 @@ export const COUNTRIES: Country[] = [
   { name: "Angola", code: "AO", neighbors: ["CG", "CD", "ZM", "NA"] },
   { name: "Benin", code: "BJ", neighbors: ["TG", "NE", "NG", "BF"] },
   { name: "Botswana", code: "BW", neighbors: ["ZA", "NA", "ZW", "ZM"] },
-  { name: "Burkina Faso", code: "BF", neighbors: ["ML", "NE", "BJ", "TG", "GH", "CI", "GW"] },
+  { name: "Burkina Faso", code: "BF", neighbors: ["ML", "NE", "BJ", "TG", "GH", "CI"] },
   { name: "Burundi", code: "BI", neighbors: ["RW", "TZ", "CD"] },
   { name: "Cameroon", code: "CM", neighbors: ["NG", "TD", "CF", "CG", "GA", "GQ"] },
   { name: "Central African Republic", code: "CF", neighbors: ["CM", "TD", "SD", "SS", "CD", "CG"] },
@@ -117,7 +117,7 @@ export const COUNTRIES: Country[] = [
   { name: "Kyrgyzstan", code: "KG", neighbors: ["KZ", "CN", "TJ", "UZ"] },
   { name: "Laos", code: "LA", neighbors: ["CN", "VN", "KH", "TH", "MM"] },
   { name: "Lebanon", code: "LB", neighbors: ["PS", "SY"] },
-  { name: "Malaysia", code: "MY", neighbors: ["TH", "BN", "ID"] },
+  { name: "Malaysia", code: "MY", neighbors: ["TH", "BN", "ID", "SG"] }, // SG via the Johor causeway
   { name: "Maldives", code: "MV", neighbors: [] },
   { name: "Mongolia", code: "MN", neighbors: ["RU", "CN"] },
   { name: "Myanmar", code: "MM", neighbors: ["BD", "IN", "CN", "LA", "TH"] },

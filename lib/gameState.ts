@@ -22,6 +22,9 @@ export interface LevelState {
   greenChain: string[];
   /** Whether sea crossings count as connections for this puzzle */
   oceanCrossings?: boolean;
+  /** Country the current hint points at, and how much of it is revealed (1 = first letter, 2 = name) */
+  hintCode?: string;
+  hintLevel?: number;
 }
 
 export interface DayStats {
@@ -271,7 +274,8 @@ export function buildShareString(
   level: number,
   guesses: Guess[],
   status: "won" | "lost",
-  pathLength: number
+  pathLength: number,
+  hintsUsed = 0
 ): string {
   const colorMap: Record<GuessColor, string> = {
     green: "🟩",
@@ -279,7 +283,8 @@ export function buildShareString(
     grey: "⬜",
   };
   const squares = guesses.map((g) => colorMap[g.color]).join("");
-  const maxGuesses = pathLength + 5;
+  const maxGuesses = pathLength + 5 - hintsUsed;
   const result = status === "won" ? `${guesses.length}/${maxGuesses}` : "X";
-  return `TRAVLE.EXE Level ${level} — ${result}\n${squares}`;
+  const hints = hintsUsed > 0 ? ` 💡${hintsUsed}` : "";
+  return `TRAVLE.EXE Level ${level} — ${result}${hints}\n${squares}`;
 }

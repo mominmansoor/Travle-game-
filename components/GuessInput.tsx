@@ -21,8 +21,21 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!disabled) inputRef.current?.focus();
+    if (!disabled) inputRef.current?.focus({ preventScroll: true });
   }, [disabled]);
+
+  // "/" jumps to the input from anywhere on the page
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (e.key === "/" && t?.tagName !== "INPUT" && t?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
@@ -53,6 +66,10 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
     } else if (e.key === "Enter") {
       e.preventDefault();
       submitCurrent();
+    } else if (e.key === "Tab" && suggestions.length > 0) {
+      // Tab completes the highlighted suggestion into the box
+      e.preventDefault();
+      setValue(suggestions[selectedIdx].name);
     } else if (e.key === "Escape") {
       setSuggestions([]);
       setValue("");
@@ -102,7 +119,7 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
   return (
     <div className="relative w-full">
       <div
-        className={`flex items-center ${shaking ? "shake" : ""}`}
+        className={`guess-box flex items-center ${shaking ? "shake" : ""}`}
         style={{
           border: "1px solid var(--border)",
           background: "var(--bg-alt)",
@@ -121,7 +138,10 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
             color: "var(--fg)",
             caretColor: "var(--green)",
             outline: "none",
+            fontSize: "16px", // ≥16px stops iOS zooming in on focus
           }}
+          aria-label="Country name"
+          aria-autocomplete="list"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -145,6 +165,7 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
       {suggestions.length > 0 && (
         <div
           className="absolute left-0 right-0 z-50"
+          role="listbox"
           style={{
             border: "1px solid var(--border)",
             borderTop: "none",
@@ -155,6 +176,8 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded }
             <div
               key={c.code}
               onClick={() => selectSuggestion(c)}
+              role="option"
+              aria-selected={i === selectedIdx}
               className="px-4 py-1 cursor-pointer"
               style={{
                 background: i === selectedIdx ? "rgba(0,255,65,0.08)" : "transparent",

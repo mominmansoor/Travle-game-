@@ -42,7 +42,7 @@ you get guesses equal to the shortest route plus 5, and a wrong guess still eats
 
 <img src="docs/path-log.png" alt="the path log showing green, orange and grey guesses" width="100%" />
 
-every guess gets a colour so you know how you're doing:
+every guess gets a colour so you know how you're doing, measured from everything you've already linked to the start:
 
 | colour | meaning |
 | :-- | :-- |
@@ -61,6 +61,12 @@ flip **OCEAN CROSSINGS** on in `[CFG]` and short sea hops start counting as bord
 <img src="docs/solved.png" alt="the path complete panel showing efficiency and a shareable result row" width="100%" />
 
 when you finish you get your efficiency and a little emoji row you can share to flex on people.
+
+stuck? **[HINT]** gives you the first letter of the next stop, hit it again for the full name. each hint burns one guess and shows up as 💡 in your share.
+
+### the map
+
+it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with lines (dashed for sea hops), hovering a country you've revealed shows its name, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as dots. drag to pan, ctrl+scroll or pinch to zoom, and **FIT** snaps back to your route.
 
 ## themes
 

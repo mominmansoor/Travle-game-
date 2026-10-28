@@ -4,80 +4,39 @@ import React from "react";
 
 interface TerminalProps {
   title?: string;
+  /** Small status text pinned to the top-right of the frame */
+  right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   width?: string;
   compact?: boolean;
+  /** Tint the frame (e.g. accent on a win) */
+  borderColor?: string;
 }
 
 /**
- * Reusable terminal-style bordered container using ASCII box-drawing chars.
+ * Terminal-style panel: a single bordered box with its title sitting in
+ * the top edge, so the frame always lines up at any width.
  */
 export default function Terminal({
   title,
+  right,
   children,
   className = "",
   width = "w-full",
   compact = false,
+  borderColor,
 }: TerminalProps) {
-  const pad = compact ? "px-3 py-2" : "px-4 py-3";
+  const pad = compact ? "px-2 pt-4 pb-2" : "px-4 pt-5 pb-3";
 
   return (
-    <div
-      className={`${width} ${className}`}
-      style={{ color: "var(--fg)" }}
+    <section
+      className={`panel ${width} ${className}`}
+      style={{ color: "var(--fg)", borderColor: borderColor ?? undefined }}
     >
-      {/* Top border */}
-      <div className="flex items-center" style={{ color: "var(--border)" }}>
-        <span style={{ color: "var(--dim)" }}>┌</span>
-        {title ? (
-          <>
-            <span style={{ color: "var(--dim)" }}>─</span>
-            <span className="px-1" style={{ color: "var(--fg)", fontSize: "0.75rem", letterSpacing: "0.1em" }}>
-              {title}
-            </span>
-            <span
-              style={{
-                color: "var(--dim)",
-                flex: 1,
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {"─".repeat(80)}
-            </span>
-          </>
-        ) : (
-          <span
-            style={{
-              color: "var(--dim)",
-              flex: 1,
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {"─".repeat(80)}
-          </span>
-        )}
-        <span style={{ color: "var(--dim)" }}>┐</span>
-      </div>
-
-      {/* Content */}
-      <div
-        className={`border-l border-r ${pad}`}
-        style={{ borderColor: "var(--border)" }}
-      >
-        {children}
-      </div>
-
-      {/* Bottom border */}
-      <div className="flex items-center" style={{ color: "var(--dim)" }}>
-        <span>└</span>
-        <span style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap" }}>
-          {"─".repeat(80)}
-        </span>
-        <span>┘</span>
-      </div>
-    </div>
+      {title && <div className="panel-title">{title}</div>}
+      {right && <div className="panel-right">{right}</div>}
+      <div className={pad}>{children}</div>
+    </section>
   );
 }
