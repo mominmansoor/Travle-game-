@@ -283,8 +283,8 @@ export function buildShareString(
     grey: "⬜",
   };
   const squares = guesses.map((g) => colorMap[g.color]).join("");
-  const maxGuesses = pathLength + 5 - hintsUsed;
-  const result = status === "won" ? `${guesses.length}/${maxGuesses}` : "X";
+  const best = Math.max(1, pathLength - 1);
+  const result = status === "won" ? `${guesses.length} guesses (best ${best})` : "turned back";
   const hints = hintsUsed > 0 ? ` 💡${hintsUsed}` : "";
-  return `TRAVLE.EXE Level ${level} — ${result}${hints}\n${squares}`;
+  return `Travle · Leg ${level} — ${result}${hints}\n${squares}`;
 }
