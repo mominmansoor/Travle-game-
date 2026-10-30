@@ -38,7 +38,7 @@ every session gives you 5 levels and they get meaner as you go:
 | 4 | expert | 8 to 10 hops |
 | 5 | nightmare | 11 or more, through some very obscure countries |
 
-you get guesses equal to the shortest route plus 5, and a wrong guess still eats one. beat a level to unlock the next.
+there's no limit on guesses, so you can keep going until you get there, but the fewer you use the better your efficiency score. stuck? a hint shows the next stop, and **turn back** ends the leg and shows you the route. finish or turn back on a level to unlock the next.
 
 <img src="docs/path-log.png" alt="the logbook showing guesses marked on course, detour and adrift" width="100%" />
 
@@ -56,7 +56,7 @@ no double dipping: once you've entered a country you can't enter it again, and y
 
 ### ocean crossings
 
-flip **ocean crossings** on in settings and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one costs a guess.
+flip **ocean crossings** on in settings and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one counts as a guess.
 
 there are 32 of them, from the five oceans down to straits like Gibraltar, and common names work too ("Med", "Bering Sea", "Arabian Gulf"). this is also what puts island countries like Japan, Sri Lanka, Australia and Fiji into puzzles. since an ocean touches dozens of coasts the world gets a lot smaller, so ocean mode uses shorter route lengths for each level. toggling it rebuilds all five levels.
 

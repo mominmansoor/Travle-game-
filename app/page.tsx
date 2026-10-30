@@ -26,9 +26,6 @@ const LEVEL_DIFFICULTY = ["easy", "medium", "hard", "expert", "nightmare"];
 const NUMERALS = ["I", "II", "III", "IV", "V"];
 const HELP_SEEN_KEY = "travle_help_seen";
 
-function maxGuesses(state: LevelState) {
-  return state.pathLength + 5 - (state.hintsUsed ?? 0);
-}
 
 const nameOf = nodeName;
 
@@ -135,8 +132,8 @@ export default function Home() {
     const won = connectedPath !== null;
     const finalGreenChain = won ? connectedPath! : newGreenChain;
 
-    const lost = !won && newGuesses.length >= maxGuesses(currentState);
-    const newStatus = won ? "won" : lost ? "lost" : "playing";
+    // No guess limit: a leg only ends when you arrive or choose to turn back
+    const newStatus = won ? "won" : "playing";
 
     updateCurrent({
       ...currentState,
@@ -149,10 +146,6 @@ export default function Home() {
       audio.win();
       setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
       recordLevelResult(true);
-    } else if (newStatus === "lost") {
-      audio.lose();
-      setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
-      recordLevelResult(false);
     }
     return true;
   }
@@ -163,8 +156,7 @@ export default function Home() {
     : null;
   const activeHint =
     currentState?.hintCode && currentState.hintCode === hintTarget ? currentState.hintLevel ?? 0 : 0;
-  const guessesLeft = currentState ? maxGuesses(currentState) - currentState.guesses.length : 0;
-  const canHint = !!hintTarget && activeHint < 2 && guessesLeft > 1;
+  const canHint = !!hintTarget && activeHint < 2;
 
   function handleHint() {
     if (!currentState || !hintTarget || !canHint) return;
@@ -175,6 +167,15 @@ export default function Home() {
       hintCode: hintTarget,
       hintLevel: activeHint + 1,
     });
+  }
+
+  /** Turn back: end the leg and reveal the route you were looking for. */
+  function handleGiveUp() {
+    if (!currentState || currentState.status !== "playing") return;
+    audio.lose();
+    updateCurrent({ ...currentState, status: "lost" });
+    setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
+    recordLevelResult(false);
   }
 
   function handleShare() {
@@ -218,7 +219,6 @@ export default function Home() {
   }
 
   const totalGuesses = currentState?.guesses.length ?? 0;
-  const guessMax = currentState ? maxGuesses(currentState) : 0;
   // A route of N hops needs N − 1 countries in between
   const minGuesses = currentState ? Math.max(1, currentState.pathLength - 1) : 1;
   const efficiency = currentState && totalGuesses > 0
@@ -275,8 +275,8 @@ export default function Home() {
                   <li><span style={{ color: "var(--sub)" }}>○</span> <i>adrift</i>, way off, or doesn&apos;t connect at all</li>
                 </ul>
                 <p>
-                  You get the shortest route plus five guesses, and each country can only be entered once. Stuck? A hint
-                  shows the next stop but costs a guess. Turn on <b>ocean crossings</b> in settings and seas become stops
+                  There&apos;s no limit on guesses, but fewer is better, and each country can only be entered once. Stuck? A
+                  hint shows the next stop, or you can turn back to see the route. Turn on <b>ocean crossings</b> in settings and seas become stops
                   too: to cross water you have to name it, e.g. United States → Bering Strait → Russia.
                 </p>
                 <div style={{ textAlign: "center" }}>
@@ -389,35 +389,34 @@ export default function Home() {
                     shortest route <b>{currentState.pathLength}</b> borders
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="meter" aria-label={`${totalGuesses} of ${guessMax} guesses used`}>
-                      {Array.from({ length: currentState.pathLength + 5 }).map((_, i) => {
-                        const g = currentState.guesses[i];
-                        const burnt = i >= guessMax;
-                        const ink = g ? (g.color === "green" ? "var(--accent)" : g.color === "orange" ? "var(--warn)" : "var(--sub)") : undefined;
-                        return (
-                          <span
-                            key={i}
-                            className={burnt ? "burnt" : ""}
-                            style={ink ? { background: ink, borderColor: ink } : undefined}
-                          />
-                        );
-                      })}
-                    </span>
-                    <span style={{ color: guessesLeft <= 2 && currentState.status === "playing" ? "var(--error)" : "var(--text)", whiteSpace: "nowrap" }}>
-                      {totalGuesses} of {guessMax}
+                    {totalGuesses > 0 && (
+                      <span className="meter" aria-hidden>
+                        {currentState.guesses.map((g, i) => {
+                          const ink = g.color === "green" ? "var(--accent)" : g.color === "orange" ? "var(--warn)" : "var(--sub)";
+                          return <span key={i} style={{ background: ink, borderColor: ink }} />;
+                        })}
+                      </span>
+                    )}
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      <b>{totalGuesses}</b> guess{totalGuesses === 1 ? "" : "es"}
                     </span>
                   </span>
                 </div>
 
                 <div className="route-actions">
                   {currentState.status === "playing" && (
-                    <button className="btn quiet" onClick={handleHint} disabled={!canHint} title="Reveal the next stop — costs one guess">
+                    <button className="btn quiet" onClick={handleHint} disabled={!canHint} title="Reveal the next stop">
                       Hint
                     </button>
                   )}
                   <button className="btn quiet" onClick={handleReset} title="Restart this route">
                     Start over
                   </button>
+                  {currentState.status === "playing" && (
+                    <button className="btn quiet" onClick={handleGiveUp} title="End this leg and reveal the route">
+                      Turn back
+                    </button>
+                  )}
                 </div>
 
                 {activeHint > 0 && hintTarget && (
@@ -449,7 +448,7 @@ export default function Home() {
                       <span className="err">{guessError}</span>
                     ) : (
                       <span>
-                        {guessesLeft} guess{guessesLeft === 1 ? "" : "es"} left · press <kbd>/</kbd> to write · <kbd>↑</kbd><kbd>↓</kbd> to choose
+                        press <kbd>/</kbd> to write · <kbd>↑</kbd><kbd>↓</kbd> to choose
                       </span>
                     )}
                   </div>
@@ -471,7 +470,7 @@ export default function Home() {
               {/* Result */}
               {currentState.status !== "playing" && (
                 <Terminal
-                  title={currentState.status === "won" ? "Arrived" : "Lost at sea"}
+                  title={currentState.status === "won" ? "Arrived" : "Turned back"}
                   borderColor={currentState.status === "won" ? "var(--accent)" : "var(--error)"}
                   className="mt-6"
                 >
@@ -488,7 +487,7 @@ export default function Home() {
                       {hintsUsed > 0 && <div><b>{hintsUsed}</b><span>hints</span></div>}
                     </div>
                   ) : (
-                    <div className="result-verdict" style={{ color: "var(--error)" }}>Out of guesses, and far from shore.</div>
+                    <div className="result-verdict" style={{ color: "var(--error)" }}>You turned back after {totalGuesses} guess{totalGuesses === 1 ? "" : "es"}.</div>
                   )}
 
                   <div className="route-summary">
