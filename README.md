@@ -1,8 +1,8 @@
 <div align="center">
 
-# travle.exe
+# travle
 
-**a geography puzzle game that looks like a terminal**
+**a geography puzzle game drawn like an old printed chart**
 
 get from one country to another by naming the countries in between
 
@@ -14,7 +14,7 @@ get from one country to another by naming the countries in between
 
 <br /><br />
 
-<img src="docs/hero.png" alt="a level 3 round going from Senegal to Turkey, with the path so far lit up green across north Africa" width="100%" />
+<img src="docs/hero.png" alt="a leg from Italy to Serbia on parchment, with Austria inked in green and a red pin on the destination" width="100%" />
 
 </div>
 
@@ -24,7 +24,7 @@ get from one country to another by naming the countries in between
 
 you get a start country and a target country. you type in countries one by one, and every one has to share a land border with the last one you got right. connect the two and you win.
 
-above is a level 3 round from Senegal to Turkey. Mauritania, Algeria and Libya are on track, Armenia was a detour and Brazil was a cry for help.
+above is an easy leg from Italy to Serbia. Austria is on course, Greece was a wrong turn.
 
 ## how a round works
 
@@ -40,7 +40,7 @@ every session gives you 5 levels and they get meaner as you go:
 
 you get guesses equal to the shortest route plus 5, and a wrong guess still eats one. beat a level to unlock the next.
 
-<img src="docs/path-log.png" alt="the path log showing green, orange and grey guesses" width="100%" />
+<img src="docs/path-log.png" alt="the logbook showing guesses marked on course, detour and adrift" width="100%" />
 
 every guess gets a colour so you know how you're doing, measured from everything you've already linked to the start:
 
@@ -56,23 +56,25 @@ no double dipping: once you've entered a country you can't enter it again, and y
 
 ### ocean crossings
 
-flip **OCEAN CROSSINGS** on in `[CFG]` and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one costs a guess.
+flip **ocean crossings** on in settings and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one costs a guess.
 
 there are 32 of them, from the five oceans down to straits like Gibraltar, and common names work too ("Med", "Bering Sea", "Arabian Gulf"). this is also what puts island countries like Japan, Sri Lanka, Australia and Fiji into puzzles. since an ocean touches dozens of coasts the world gets a lot smaller, so ocean mode uses shorter route lengths for each level. toggling it rebuilds all five levels.
 
 ### the map
 
-it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with lines (dashed for sea hops), hovering a country you've revealed shows its name, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as dots. drag to pan, ctrl+scroll or pinch to zoom, and **FIT** snaps back to your route.
+it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with inked route lines (dotted for sea hops), your start gets a flag and the destination a red pin, hovering a country you've revealed shows its name, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as dots. drag to pan, ctrl+scroll or pinch to zoom, and **Fit** snaps back to your route.
 
-## themes
+## the look
 
-20 of them. Dracula, Nord, Tokyo Night, Gruvbox, Catppuccin Mocha, Synthwave, Amber, Matrix and more, plus the plain green on black one it ships with.
+everything sits on one sheet of paper inside a double ruled border: serif lettering, a logbook for your guesses, a cartouche and compass rose on the map, and the five levels set out as legs of a voyage, from *Coastal* to *Here be dragons*. the style takes its cue from [Farflung](https://farflung.game/).
 
-<img src="docs/themes.png" alt="the same round in six themes: dracula, synthwave, nord, amber, tokyo night and gruvbox" width="100%" />
+there are six chart styles to pick from: parchment, admiralty, sepia, verdigris, night chart and blueprint.
 
-<sub>dracula, synthwave, nord, amber, tokyo night, gruvbox</sub>
+<img src="docs/themes.png" alt="the same leg in all six chart styles" width="100%" />
 
-there's also CRT scanlines, sound effects and a green text mode, all toggleable in settings.
+<sub>parchment, admiralty, sepia / verdigris, night chart, blueprint</sub>
+
+sound effects are still there, toggleable in settings.
 
 ## under the hood
 
@@ -97,8 +99,8 @@ then open http://localhost:3000
 
 ```
 app/          the page and layout
-components/   map, guess input, guess history, stats chart, terminal frame, theme picker
-data/         countries, border data, sea links, puzzle generation, themes
+components/   map, guess input, logbook, stats chart, panel frame, chart style picker
+data/         countries, border data, sea links, puzzle generation, chart styles
 lib/          BFS pathfinding, game state, audio, theme handling
 docs/         the screenshots in this readme
 ```

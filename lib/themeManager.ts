@@ -2,22 +2,31 @@ import { themes, themeMap, DEFAULT_THEME, Theme } from "@/data/themes";
 
 const THEME_KEY = "travle-theme";
 
+const VARS: [string, keyof Theme][] = [
+  ["--bg", "bg"],
+  ["--bg-alt", "bgAlt"],
+  ["--text", "text"],
+  ["--sub", "sub"],
+  ["--accent", "accent"],
+  ["--error", "error"],
+  ["--warn", "warn"],
+  ["--sea", "sea"],
+  ["--land", "land"],
+];
+
 export function applyTheme(name: string): void {
   const theme: Theme = themeMap.get(name) ?? themeMap.get(DEFAULT_THEME)!;
   const r = document.documentElement;
-  r.style.setProperty("--bg",      theme.bg);
-  r.style.setProperty("--bg-alt",  theme.bgAlt);
-  r.style.setProperty("--text",    theme.text);
-  r.style.setProperty("--sub",     theme.sub);
-  r.style.setProperty("--accent",  theme.accent);
-  r.style.setProperty("--error",   theme.error);
-  r.style.setProperty("--warn",    theme.warn);
-  r.style.setProperty("--scanline-opacity", String(theme.scanlineOpacity));
+  for (const [v, k] of VARS) r.style.setProperty(v, String(theme[k]));
+  r.dataset.tone = theme.dark ? "dark" : "light";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.bg);
 }
 
+/** Saved theme, falling back to the default if it's an old (terminal-era) name. */
 export function getSavedTheme(): string {
   if (typeof window === "undefined") return DEFAULT_THEME;
-  return localStorage.getItem(THEME_KEY) ?? DEFAULT_THEME;
+  const saved = localStorage.getItem(THEME_KEY);
+  return saved && themeMap.has(saved) ? saved : DEFAULT_THEME;
 }
 
 export function saveTheme(name: string): void {
@@ -29,33 +38,16 @@ export function initTheme(): void {
   applyTheme(getSavedTheme());
 }
 
-// Inline script string for layout.tsx to prevent flash-of-unstyled-content.
-// Embeds a minimal copy of the theme data so it runs before React hydrates.
+// Inline script string for layout.tsx so the right paper is down before first paint.
 export function buildThemeInitScript(): string {
-  const themesData = themes.map((t) => ({
-    n: t.name,
-    bg: t.bg,
-    ba: t.bgAlt,
-    tx: t.text,
-    su: t.sub,
-    ac: t.accent,
-    er: t.error,
-    wn: t.warn,
-    so: t.scanlineOpacity,
-  }));
+  const data = themes.map((t) => [t.name, t.dark ? 1 : 0, ...VARS.map(([, k]) => t[k])]);
   return `(function(){try{
-var k="${THEME_KEY}",d="${DEFAULT_THEME}";
-var n=localStorage.getItem(k)||d;
-var ts=${JSON.stringify(themesData)};
-var t=ts.find(function(x){return x.n===n;})||ts[0];
+var v=${JSON.stringify(VARS.map(([v]) => v))};
+var ts=${JSON.stringify(data)};
+var n=localStorage.getItem("${THEME_KEY}")||"${DEFAULT_THEME}";
+var t=ts.find(function(x){return x[0]===n;})||ts[0];
 var r=document.documentElement;
-r.style.setProperty("--bg",t.bg);
-r.style.setProperty("--bg-alt",t.ba);
-r.style.setProperty("--text",t.tx);
-r.style.setProperty("--sub",t.su);
-r.style.setProperty("--accent",t.ac);
-r.style.setProperty("--error",t.er);
-r.style.setProperty("--warn",t.wn);
-r.style.setProperty("--scanline-opacity",String(t.so));
+for(var i=0;i<v.length;i++)r.style.setProperty(v[i],t[i+2]);
+r.dataset.tone=t[1]?"dark":"light";
 }catch(e){}})();`;
 }

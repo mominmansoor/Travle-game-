@@ -120,78 +120,43 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded, 
   }
 
   return (
-    <div className="relative w-full">
-      <div
-        className={`guess-box flex items-center ${shaking ? "shake" : ""}`}
-        style={{
-          border: "1px solid var(--border)",
-          background: "var(--bg-alt)",
-        }}
-      >
-        <span style={{ color: "var(--green)", padding: "0 8px" }}>{">"}</span>
+    <div className="guess-wrap">
+      <div className={`guess-box ${shaking ? "shake" : ""}`}>
+        <span className="compass" aria-hidden>✦</span>
         <input
           ref={inputRef}
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder={placeholder ?? "TYPE COUNTRY NAME..."}
-          className="flex-1 bg-transparent py-2 pr-3"
-          style={{
-            color: "var(--fg)",
-            caretColor: "var(--green)",
-            outline: "none",
-            fontSize: "16px", // ≥16px stops iOS zooming in on focus
-          }}
+          placeholder={placeholder ?? "Name a country…"}
+          style={{ fontSize: "max(16px, 1.35rem)" /* ≥16px stops iOS zooming in on focus */ }}
           aria-label="Country name"
           aria-autocomplete="list"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
         />
-        <button
-          onClick={submitCurrent}
-          disabled={disabled}
-          className="px-3 py-2"
-          style={{
-            color: disabled ? "var(--grey)" : "var(--green)",
-            borderLeft: "1px solid var(--border)",
-            background: "transparent",
-            cursor: disabled ? "not-allowed" : "pointer",
-          }}
-        >
-          [ENTER]
+        <button className="btn primary" onClick={submitCurrent} disabled={disabled || !value.trim()}>
+          Set course
         </button>
       </div>
 
       {/* Autocomplete dropdown */}
       {suggestions.length > 0 && (
-        <div
-          className="absolute left-0 right-0 z-50"
-          role="listbox"
-          style={{
-            border: "1px solid var(--border)",
-            borderTop: "none",
-            background: "var(--bg-alt)",
-          }}
-        >
+        <div className="suggestions" role="listbox">
           {suggestions.map((c, i) => (
             <div
               key={c.code}
               onClick={() => selectSuggestion(c)}
               role="option"
               aria-selected={i === selectedIdx}
-              className="px-4 py-1 cursor-pointer"
-              style={{
-                background: i === selectedIdx ? "rgba(0,255,65,0.08)" : "transparent",
-                color: i === selectedIdx ? "var(--green)" : "var(--fg)",
-                borderLeft: i === selectedIdx ? "2px solid var(--green)" : "2px solid transparent",
-              }}
+              className={`suggestion ${i === selectedIdx ? "on" : ""}`}
               onMouseEnter={() => setSelectedIdx(i)}
             >
-              {i === selectedIdx ? "> " : "  "}
-              {c.water && <span style={{ color: "var(--accent)" }}>≈ </span>}
-              {c.name}
+              <span className="mark">{i === selectedIdx ? "➤" : ""}</span>
+              <span>{c.name}</span>
+              {c.water && <span className="water">≈ waters</span>}
             </div>
           ))}
         </div>

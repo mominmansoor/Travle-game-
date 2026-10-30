@@ -7,57 +7,71 @@ interface StatsChartProps {
   history: DayStats[];
 }
 
+/** Legs completed per day, drawn as inked bars on ruled paper. */
 export default function StatsChart({ history }: StatsChartProps) {
   const recent = history.slice(-30);
-  const maxLevels = 5;
-  const barHeight = 8; // lines tall
 
   if (recent.length === 0) {
     return (
-      <div style={{ color: "var(--dim)", textAlign: "center", padding: "16px" }}>
-        NO DATA YET — PLAY SOME PUZZLES
-      </div>
+      <p style={{ textAlign: "center", fontStyle: "italic", color: "var(--sub)", margin: "6px 0" }}>
+        No voyages recorded yet. Finish a leg to start the ledger.
+      </p>
     );
   }
 
-  // Build ASCII bar chart
-  const rows: string[] = [];
-  for (let row = barHeight; row >= 1; row--) {
-    let line = "";
-    for (let i = 0; i < recent.length; i++) {
-      const d = recent[i];
-      const barVal = d.levelsCompleted; // 0-5
-      const filled = (barVal / maxLevels) * barHeight >= row;
-      if (filled) {
-        line += d.won ? "█" : "▒";
-      } else {
-        line += " ";
-      }
-      if (i < recent.length - 1) line += " ";
-    }
-    const label = row === barHeight ? `${maxLevels}` : row % 2 === 0 ? `${row}` : " ";
-    rows.push(`${label.padStart(1)} │${line}│`);
-  }
-
-  // X-axis
-  const xAxis = `  └${"─".repeat(recent.length * 2 - 1)}┘`;
-
-  // Date labels (just first and last)
-  const firstDate = recent[0]?.date?.slice(5) ?? "";
-  const lastDate = recent[recent.length - 1]?.date?.slice(5) ?? "";
-  const spacing = Math.max(0, (recent.length * 2 - 1) - firstDate.length - lastDate.length - 2);
-  const dateRow = `   ${firstDate}${" ".repeat(spacing)}${lastDate}`;
+  const W = 600;
+  const H = 150;
+  const pad = { l: 22, r: 6, t: 8, b: 22 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  const slot = iw / Math.max(recent.length, 7);
+  const bw = Math.min(16, slot * 0.6);
 
   return (
-    <div style={{ fontFamily: "monospace", fontSize: "0.8rem", lineHeight: "1.4" }}>
-      <div style={{ color: "var(--dim)", marginBottom: "4px", fontSize: "0.7rem" }}>
-        LEVELS COMPLETED PER DAY (LAST {recent.length} DAYS) — █ WIN  ▒ LOSS
+    <div>
+      <div style={{ fontFamily: "var(--caps)", letterSpacing: "0.1em", fontSize: "0.78rem", color: "var(--sub)", textAlign: "center", marginBottom: 4 }}>
+        legs completed, last {recent.length} day{recent.length === 1 ? "" : "s"}
       </div>
-      <pre style={{ color: "var(--fg)", margin: 0, overflow: "auto" }}>
-        {rows.join("\n")}
-        {"\n" + xAxis}
-        {"\n" + dateRow}
-      </pre>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Legs completed per day">
+        {[0, 1, 2, 3, 4, 5].map((v) => {
+          const y = pad.t + ih - (v / 5) * ih;
+          return (
+            <g key={v}>
+              <line x1={pad.l} x2={W - pad.r} y1={y} y2={y} stroke="var(--text)" strokeOpacity={v === 0 ? 0.6 : 0.12} strokeWidth={0.75} strokeDasharray={v === 0 ? undefined : "2 3"} />
+              <text x={pad.l - 6} y={y} textAnchor="end" dominantBaseline="central" fontSize="11" fill="var(--sub)" fontFamily="var(--serif)">
+                {v}
+              </text>
+            </g>
+          );
+        })}
+        {recent.map((d, i) => {
+          const h = (d.levelsCompleted / 5) * ih;
+          const x = pad.l + slot * i + (slot - bw) / 2;
+          return (
+            <rect
+              key={d.date}
+              x={x}
+              y={pad.t + ih - h}
+              width={bw}
+              height={h}
+              fill={d.won ? "var(--accent)" : "var(--sub)"}
+              fillOpacity={d.won ? 0.85 : 0.45}
+              stroke="var(--text)"
+              strokeWidth={0.6}
+            >
+              <title>{`${d.date}: ${d.levelsCompleted} leg${d.levelsCompleted === 1 ? "" : "s"}`}</title>
+            </rect>
+          );
+        })}
+        <text x={pad.l} y={H - 4} fontSize="11" fill="var(--sub)" fontFamily="var(--serif)" fontStyle="italic">
+          {recent[0].date.slice(5)}
+        </text>
+        {recent.length > 1 && (
+          <text x={W - pad.r} y={H - 4} textAnchor="end" fontSize="11" fill="var(--sub)" fontFamily="var(--serif)" fontStyle="italic">
+            {recent[recent.length - 1].date.slice(5)}
+          </text>
+        )}
+      </svg>
     </div>
   );
 }

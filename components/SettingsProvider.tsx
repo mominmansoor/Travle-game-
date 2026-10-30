@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, Settings } from "@/lib/gameState";
 import { setSoundEnabled as audioSetEnabled } from "@/lib/audio";
 import { applyTheme, getSavedTheme, saveTheme } from "@/lib/themeManager";
+import { DEFAULT_THEME } from "@/data/themes";
 
 interface SettingsCtx {
   settings: Settings;
@@ -16,20 +17,19 @@ interface SettingsCtx {
 const Ctx = createContext<SettingsCtx>({
   settings: DEFAULT_SETTINGS,
   updateSettings: () => {},
-  currentTheme: "terminal",
+  currentTheme: DEFAULT_THEME,
   setTheme: () => {},
   themeVersion: 0,
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [currentTheme, setCurrentTheme] = useState("terminal");
+  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME);
   const [themeVersion, setThemeVersion] = useState(0);
 
   useEffect(() => {
     const s = loadSettings();
     setSettings(s);
-    applyBodyClasses(s);
     audioSetEnabled(s.sounds);
 
     const saved = getSavedTheme();
@@ -37,17 +37,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     applyTheme(saved);
   }, []);
 
-  function applyBodyClasses(s: Settings) {
-    if (typeof document === "undefined") return;
-    document.body.classList.toggle("scanlines", s.scanlines);
-    document.body.classList.toggle("green-text", s.greenText);
-  }
-
   function updateSettings(partial: Partial<Settings>) {
     const next = { ...settings, ...partial };
     setSettings(next);
     saveSettings(next);
-    applyBodyClasses(next);
     audioSetEnabled(next.sounds);
   }
 
