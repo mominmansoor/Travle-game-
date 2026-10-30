@@ -79,7 +79,7 @@ export default function MapDisplay({
   greenChain,
   ocean = false,
 }: MapDisplayProps) {
-  const { themeVersion, settings } = useSettings();
+  const { themeVersion } = useSettings();
 
   const [view, setView] = useState<View>(WORLD_VIEW);
   const [winLit, setWinLit] = useState<Set<string>>(new Set());
@@ -111,9 +111,10 @@ export default function MapDisplay({
       accent: getCSSVar("--accent"),
       error: getCSSVar("--error"),
       warn: getCSSVar("--warn"),
+      sea: getCSSVar("--sea"),
+      land: getCSSVar("--land"),
     }),
-    // greenText swaps --text/--sub on <body>, so re-read when it flips
-    [themeVersion, settings.greenText] // eslint-disable-line react-hooks/exhaustive-deps
+    [themeVersion] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── Camera ───────────────────────────────────────────────────────────────
@@ -194,7 +195,8 @@ export default function MapDisplay({
   const guessColorMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const g of guesses) {
-      m.set(g.code, g.color === "green" ? colors.accent : g.color === "orange" ? colors.warn : colors.sub);
+      // washes, not solid fills, so the paper and coastlines still show through
+      m.set(g.code, g.color === "green" ? `${colors.accent}c0` : g.color === "orange" ? `${colors.warn}99` : `${colors.sub}66`);
     }
     return m;
   }, [guesses, colors]);
@@ -210,15 +212,15 @@ export default function MapDisplay({
 
   const styleFor = useCallback(
     (a2: string | undefined): { fill: string; stroke: string; strokeWidth: number; className?: string } => {
-      const base = { fill: colors.bgAlt, stroke: `${colors.sub}aa`, strokeWidth: 0.6 };
-      if (!a2) return { ...base, stroke: `${colors.sub}55` };
-      if (winLit.has(a2)) return { fill: colors.accent, stroke: colors.text, strokeWidth: 1.2 };
-      if (a2 === startCode) return { fill: colors.text, stroke: colors.text, strokeWidth: 1 };
+      const base = { fill: colors.land, stroke: `${colors.text}8c`, strokeWidth: 0.55 };
+      if (!a2) return { ...base, stroke: `${colors.text}55` };
+      if (winLit.has(a2)) return { fill: colors.accent, stroke: colors.text, strokeWidth: 1 };
+      if (a2 === startCode) return { fill: "url(#travle-start-hatch)", stroke: colors.text, strokeWidth: 1.4 };
       if (a2 === endCode) {
-        return { fill: "url(#travle-target-hatch)", stroke: colors.warn, strokeWidth: 1.8, className: "map-pulse" };
+        return { fill: "url(#travle-target-hatch)", stroke: colors.warn, strokeWidth: 1.6, className: "map-pulse" };
       }
       const gc = guessColorMap.get(a2);
-      if (gc) return { fill: gc, stroke: colors.bg, strokeWidth: 0.6 };
+      if (gc) return { fill: gc, stroke: colors.text, strokeWidth: 0.8 };
       if (status === "lost" && optimalSet.has(a2)) {
         return { fill: `${colors.accent}40`, stroke: colors.accent, strokeWidth: 1.2 };
       }
@@ -307,44 +309,40 @@ export default function MapDisplay({
   const startGeo = COUNTRY_GEO.get(startCode);
   const endGeo = COUNTRY_GEO.get(endCode);
 
-  const btn: React.CSSProperties = {
-    background: `${colors.bg}e6`,
-    border: `1px solid ${colors.sub}`,
-    color: colors.text,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    height: 26,
-    minWidth: 26,
-    padding: "0 7px",
-    fontSize: "0.75rem",
-    lineHeight: 1,
-  };
-
   return (
     <div ref={wrapRef} style={{ width: "100%", position: "relative" }}>
+      <div className="map-frame">
+      <div className="map-frame-inner">
       {/* Controls */}
       <div className="map-controls">
-        <button onClick={fitRoute} style={{ ...btn, color: follow ? colors.accent : colors.text }} title="Frame the route">
-          FIT
-        </button>
-        <button onClick={() => { setFollow(false); animateTo(WORLD_VIEW); }} style={btn} title="Whole world">
-          WORLD
-        </button>
-        <button onClick={() => zoomBy(0.5)} disabled={z <= MIN_ZOOM + 0.01} style={btn} aria-label="Zoom out">−</button>
-        <button onClick={() => zoomBy(2)} disabled={z >= MAX_ZOOM - 0.01} style={btn} aria-label="Zoom in">+</button>
+        <button onClick={fitRoute} className={follow ? "on" : ""} title="Frame the route">Fit</button>
+        <button onClick={() => { setFollow(false); animateTo(WORLD_VIEW); }} title="Whole world">World</button>
+        <button onClick={() => zoomBy(0.5)} disabled={z <= MIN_ZOOM + 0.01} aria-label="Zoom out">−</button>
+        <button onClick={() => zoomBy(2)} disabled={z >= MAX_ZOOM - 0.01} aria-label="Zoom in">+</button>
       </div>
+
+      <div className="map-cartouche">
+        <b>{nameOf(startCode)} to {nameOf(endCode)}</b>
+        <i>{ocean ? "by land & sea" : "overland"}</i>
+      </div>
+
+      <CompassRose ink={colors.text} paper={colors.land} accent={colors.warn} />
 
       <ComposableMap
         projection="geoEqualEarth"
         projectionConfig={{ scale: MAP_SCALE }}
         width={MAP_WIDTH}
         height={MAP_HEIGHT}
-        style={{ width: "100%", height: "auto", display: "block", background: colors.bg }}
+        style={{ width: "100%", height: "auto", display: "block", background: colors.sea }}
       >
         <defs>
           <pattern id="travle-target-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
-            <rect width="4" height="4" fill={`${colors.warn}33`} />
-            <line x1="0" y1="0" x2="0" y2="4" stroke={colors.warn} strokeWidth="1.6" />
+            <rect width="4" height="4" fill={`${colors.warn}2e`} />
+            <line x1="0" y1="0" x2="0" y2="4" stroke={colors.warn} strokeWidth="1.3" />
+          </pattern>
+          <pattern id="travle-start-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(-45)">
+            <rect width="4" height="4" fill={colors.land} />
+            <line x1="0" y1="0" x2="0" y2="4" stroke={colors.text} strokeWidth="0.9" strokeOpacity="0.7" />
           </pattern>
         </defs>
         <ZoomableGroup
@@ -356,8 +354,8 @@ export default function MapDisplay({
           onMoveEnd={handleMoveEnd}
           filterZoomEvent={zoomFilter}
         >
-          <Sphere id="travle-sphere" fill={colors.bg} stroke={`${colors.sub}66`} strokeWidth={0.6} />
-          <Graticule stroke={`${colors.sub}26`} strokeWidth={0.5} style={{ vectorEffect: "non-scaling-stroke" } as React.CSSProperties} />
+          <Sphere id="travle-sphere" fill={colors.sea} stroke={colors.text} strokeWidth={0.9} />
+          <Graticule stroke={`${colors.text}26`} strokeWidth={0.5} strokeDasharray="2 3" style={{ vectorEffect: "non-scaling-stroke" } as React.CSSProperties} />
 
           {countryLayer}
 
@@ -367,9 +365,9 @@ export default function MapDisplay({
               key={`${h.key}-case`}
               from={h.from}
               to={h.to}
-              stroke={colors.bg}
-              strokeWidth={4}
-              strokeOpacity={0.7}
+              stroke={colors.land}
+              strokeWidth={4.5}
+              strokeOpacity={0.85}
               strokeLinecap="round"
               style={{ vectorEffect: "non-scaling-stroke", pointerEvents: "none" } as React.CSSProperties}
             />
@@ -380,9 +378,9 @@ export default function MapDisplay({
               from={h.from}
               to={h.to}
               stroke={colors.text}
-              strokeWidth={1.6}
+              strokeWidth={1.5}
               strokeLinecap="round"
-              strokeDasharray={h.sea ? "3 4" : undefined}
+              strokeDasharray={h.sea ? "1 4" : "6 3"}
               style={{ vectorEffect: "non-scaling-stroke", pointerEvents: "none" } as React.CSSProperties}
             />
           ))}
@@ -391,7 +389,7 @@ export default function MapDisplay({
             if (!g || isWater(code)) return null;
             return (
               <Marker key={`node-${code}`} coordinates={g.anchor} style={{ default: { pointerEvents: "none" } }}>
-                <circle r={2.8 * u} fill={colors.text} stroke={colors.bg} strokeWidth={1.2 * u} />
+                <circle r={2.6 * u} fill={colors.land} stroke={colors.text} strokeWidth={1.2 * u} />
               </Marker>
             );
           })}
@@ -399,7 +397,7 @@ export default function MapDisplay({
           {/* Small countries the 110m map can't draw */}
           {Object.entries(MARKER_COUNTRIES).map(([code, coordinates]) => {
             const s = styleFor(code);
-            const plain = s.fill === colors.bgAlt;
+            const plain = s.fill === colors.land;
             const r = (plain ? 2.4 : 3.6) * u;
             const fill = s.fill.startsWith("url(") ? `${colors.warn}88` : s.fill;
             return (
@@ -412,8 +410,8 @@ export default function MapDisplay({
                 <circle
                   r={r}
                   className={s.className}
-                  fill={plain ? "none" : fill}
-                  stroke={plain ? `${colors.sub}` : s.stroke}
+                  fill={plain ? colors.land : fill}
+                  stroke={plain ? `${colors.text}8c` : s.stroke}
                   strokeWidth={(plain ? 0.8 : 1.2) * u}
                 />
               </Marker>
@@ -427,7 +425,7 @@ export default function MapDisplay({
               const named = guessColorMap.has(w.code) || winLit.has(w.code) || (status === "lost" && optimalSet.has(w.code));
               const color = winLit.has(w.code)
                 ? colors.accent
-                : guessColorMap.get(w.code) ?? (named ? colors.accent : `${colors.sub}`);
+                : guessColorMap.get(w.code)?.slice(0, 7) ?? (named ? colors.accent : colors.sub);
               return (
                 <Marker
                   key={w.code}
@@ -439,7 +437,7 @@ export default function MapDisplay({
                     className={`map-label ${s.className ?? ""}`}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    style={{ fontSize: (named ? 15 : 12) * u, fill: color, stroke: colors.bg, strokeWidth: 2 * u, cursor: "default" }}
+                    style={{ fontSize: (named ? 15 : 12) * u, fill: color, stroke: colors.sea, strokeWidth: 2 * u, cursor: "default" }}
                   >
                     ≈
                   </text>
@@ -448,7 +446,7 @@ export default function MapDisplay({
                       className="map-label"
                       y={11 * u}
                       textAnchor="middle"
-                      style={{ fontSize: 9.5 * u, fill: color, stroke: colors.bg, strokeWidth: 3 * u, fontStyle: "italic" }}
+                      style={{ fontSize: 10.5 * u, fill: color, stroke: colors.sea, strokeWidth: 3 * u, fontStyle: "italic", letterSpacing: "0.08em" }}
                     >
                       {w.name}
                     </text>
@@ -457,23 +455,40 @@ export default function MapDisplay({
               );
             })}
 
-          {/* Start / target labels */}
+          {/* Start flag and destination pin, with their names lettered beside them */}
           {startGeo && (
-            <Marker coordinates={startGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
-              <text className="map-label" y={-9 * u} textAnchor="middle" style={{ fontSize: labelSize, fill: colors.text, stroke: colors.bg, strokeWidth: 3 * u }}>
+            <Marker key={`start-${startCode}`} coordinates={startGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
+              <g transform={`scale(${u * 1.45})`}><g className="pin-drop">
+                <line x1={0} y1={0} x2={0} y2={-17} stroke={colors.text} strokeWidth={1.4} />
+                <path d="M0 -17 L11 -13.5 L0 -10 Z" fill={colors.text} />
+                <circle r={2.2} fill={colors.text} />
+              </g></g>
+              <text className="map-label" x={19 * u} y={-17 * u} style={{ fontSize: labelSize * 1.1, fill: colors.text, stroke: colors.land, strokeWidth: 3.2 * u, fontStyle: "italic" }}>
                 {nameOf(startCode)}
               </text>
             </Marker>
           )}
           {endGeo && (
-            <Marker coordinates={endGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
-              <text className="map-label" y={-9 * u} textAnchor="middle" style={{ fontSize: labelSize, fill: colors.warn, stroke: colors.bg, strokeWidth: 3 * u }}>
-                ◎ {nameOf(endCode)}
+            <Marker key={`end-${endCode}`} coordinates={endGeo.anchor} style={{ default: { pointerEvents: "none" } }}>
+              <g transform={`scale(${u * 1.45})`}><g className="pin-drop" style={{ animationDelay: "120ms" }}>
+                <ellipse cx={0} cy={0} rx={3.5} ry={1.3} fill={colors.text} fillOpacity={0.25} />
+                <path
+                  d="M0 0 C-1.5 -5 -6.5 -8 -6.5 -13 A6.5 6.5 0 1 1 6.5 -13 C6.5 -8 1.5 -5 0 0 Z"
+                  fill={colors.warn}
+                  stroke={colors.text}
+                  strokeWidth={0.9}
+                />
+                <circle cx={0} cy={-13} r={2.3} fill={colors.land} />
+              </g></g>
+              <text className="map-label" x={13 * u} y={-20 * u} style={{ fontSize: labelSize * 1.1, fill: colors.warn, stroke: colors.land, strokeWidth: 3.2 * u, fontStyle: "italic" }}>
+                {nameOf(endCode)}
               </text>
             </Marker>
           )}
         </ZoomableGroup>
       </ComposableMap>
+      </div>
+      </div>
 
       {/* Hover tooltip */}
       {hover && (
@@ -482,27 +497,56 @@ export default function MapDisplay({
           style={{
             left: Math.min(hover.x + 12, (wrapRef.current?.clientWidth ?? 0) - 150),
             top: hover.y + 14,
-            borderColor: guessColorMap.get(hover.code) ?? (hover.code === endCode ? colors.warn : colors.sub),
+            borderColor: guessColorMap.get(hover.code)?.slice(0, 7) ?? (hover.code === endCode ? colors.warn : colors.text),
           }}
         >
           {nameOf(hover.code)}
           {hover.code === startCode && <span style={{ color: colors.sub }}> · start</span>}
-          {hover.code === endCode && <span style={{ color: colors.warn }}> · target</span>}
+          {hover.code === endCode && <span style={{ color: colors.warn }}> · destination</span>}
         </div>
       )}
 
       {/* Legend */}
-      <div className="map-legend" style={{ color: colors.sub }}>
-        <span><i style={{ background: colors.text }} /> START</span>
-        <span><i className="hatch" /> TARGET</span>
-        <span><i style={{ background: colors.accent }} /> ON PATH</span>
-        <span><i style={{ background: colors.warn }} /> DETOUR</span>
-        <span><i style={{ background: colors.sub }} /> OFF TRACK</span>
-        <span><b style={{ color: colors.text }}>─</b> LINKED</span>
-        {ocean && <span><b style={{ color: colors.text }}>╌ ≈</b> VIA WATER</span>}
-        {status === "lost" && <span><i style={{ background: `${colors.accent}40`, outline: `1px solid ${colors.accent}` }} /> BEST ROUTE</span>}
-        <span className="map-hint">DRAG · CTRL+SCROLL / PINCH TO ZOOM</span>
+      <div className="map-legend">
+        <span><i style={{ background: `repeating-linear-gradient(-45deg, ${colors.text}99 0 1px, transparent 1px 4px)` }} /> start</span>
+        <span><i className="hatch" style={{ borderColor: colors.warn }} /> destination</span>
+        <span><i style={{ background: `${colors.accent}c0` }} /> on course</span>
+        <span><i style={{ background: `${colors.warn}99` }} /> detour</span>
+        <span><i style={{ background: `${colors.sub}66` }} /> adrift</span>
+        <span><svg width="22" height="6" aria-hidden><line x1="1" y1="3" x2="21" y2="3" stroke={colors.text} strokeWidth="1.5" strokeDasharray="6 3" /></svg> linked</span>
+        {ocean && <span><svg width="22" height="6" aria-hidden><line x1="1" y1="3" x2="21" y2="3" stroke={colors.text} strokeWidth="1.5" strokeLinecap="round" strokeDasharray="1 4" /></svg> by sea</span>}
+        {status === "lost" && <span><i style={{ background: `${colors.accent}40`, borderColor: colors.accent }} /> best route</span>}
       </div>
+      <span className="map-hint">drag to pan · ctrl + scroll or pinch to zoom</span>
     </div>
+  );
+}
+
+/** Small engraved compass rose for the corner of the chart. */
+function CompassRose({ ink, paper, accent }: { ink: string; paper: string; accent: string }) {
+  const pts = (r1: number, r2: number, n: number, off = 0) =>
+    Array.from({ length: n * 2 }, (_, i) => {
+      const a = (Math.PI / n) * i + off - Math.PI / 2;
+      const r = i % 2 === 0 ? r1 : r2;
+      return `${(Math.cos(a) * r).toFixed(2)},${(Math.sin(a) * r).toFixed(2)}`;
+    }).join(" ");
+  return (
+    <svg
+      viewBox="-30 -34 60 64"
+      aria-hidden
+      className="compass-rose"
+      style={{ position: "absolute", right: 10, bottom: 8, zIndex: 5, pointerEvents: "none", opacity: 0.9 }}
+    >
+      <circle r={20} fill={paper} fillOpacity={0.75} stroke={ink} strokeWidth={0.6} />
+      <circle r={17} fill="none" stroke={ink} strokeWidth={0.4} strokeDasharray="1 1.6" />
+      <polygon points={pts(14, 3, 4, Math.PI / 4)} fill={ink} fillOpacity={0.35} />
+      <polygon points={pts(22, 3.6, 4)} fill={paper} stroke={ink} strokeWidth={0.7} />
+      <polygon points="0,-22 3.6,-3.6 0,0" fill={ink} />
+      <polygon points="0,22 -3.6,3.6 0,0" fill={ink} />
+      <polygon points="22,0 3.6,3.6 0,0" fill={ink} />
+      <polygon points="-22,0 -3.6,-3.6 0,0" fill={ink} />
+      <circle r={1.8} fill={accent} stroke={ink} strokeWidth={0.5} />
+      <text y={-25} textAnchor="middle" fontSize={8} fill={ink} fontFamily="var(--display)">N</text>
+    </svg>
   );
 }

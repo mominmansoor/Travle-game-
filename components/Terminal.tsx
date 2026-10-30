@@ -2,41 +2,31 @@
 
 import React from "react";
 
-interface TerminalProps {
+interface PanelProps {
   title?: string;
-  /** Small status text pinned to the top-right of the frame */
+  /** Small italic note pinned to the top-right of the frame */
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-  width?: string;
-  compact?: boolean;
-  /** Tint the frame (e.g. accent on a win) */
+  /** No card-stock tint, just the rule */
+  plain?: boolean;
+  /** Tint the rule (e.g. green ink on a win) */
   borderColor?: string;
 }
 
 /**
- * Terminal-style panel: a single bordered box with its title sitting in
- * the top edge, so the frame always lines up at any width.
+ * A ruled box with its title set into the top edge, like a cartouche on a
+ * printed chart. (File keeps its old name so imports don't churn.)
  */
-export default function Terminal({
-  title,
-  right,
-  children,
-  className = "",
-  width = "w-full",
-  compact = false,
-  borderColor,
-}: TerminalProps) {
-  const pad = compact ? "px-2 pt-4 pb-2" : "px-4 pt-5 pb-3";
-
+export default function Terminal({ title, right, children, className = "", plain, borderColor }: PanelProps) {
   return (
     <section
-      className={`panel ${width} ${className}`}
-      style={{ color: "var(--fg)", borderColor: borderColor ?? undefined }}
+      className={`panel ${plain ? "plain" : ""} ${className}`}
+      style={borderColor ? { borderColor, borderWidth: 1.25 } : undefined}
     >
       {title && <div className="panel-title">{title}</div>}
       {right && <div className="panel-right">{right}</div>}
-      <div className={pad}>{children}</div>
+      <div className="px-4 pt-6 pb-4 sm:px-6">{children}</div>
     </section>
   );
 }
