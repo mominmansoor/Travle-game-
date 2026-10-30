@@ -45,7 +45,7 @@ export interface GlobalStats {
 const LEVEL_KEY = (date: string, level: number, idx = 0) => `travle_level_${date}_${level}_${idx}`;
 const STATS_KEY = "travle_stats";
 const SETTINGS_KEY = "travle_settings";
-const UNLOCKED_KEY = (date: string) => `travle_unlocked_${date}`;
+const UNLOCKED_KEY = "travle_unlocked";
 
 export interface Settings {
   scanlines: boolean;
@@ -114,24 +114,24 @@ export function initLevelState(
 }
 
 // ── Unlock tracking ──────────────────────────────────────────────────────────
+// Kept for good, not per day: once a leg is unlocked it stays unlocked.
 
-export function getUnlockedLevel(date: string): number {
+export function getUnlockedLevel(): number {
   if (typeof window === "undefined") return 1;
   try {
-    const raw = localStorage.getItem(UNLOCKED_KEY(date));
-    return raw ? parseInt(raw, 10) : 1;
+    const n = parseInt(localStorage.getItem(UNLOCKED_KEY) ?? "1", 10);
+    return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 1;
   } catch {
     return 1;
   }
 }
 
-export function unlockNextLevel(date: string, completedLevel: number): void {
+/** Unlock everything up to and including `level`. Never re-locks. */
+export function saveUnlockedLevel(level: number): void {
   if (typeof window === "undefined") return;
   try {
-    const current = getUnlockedLevel(date);
-    if (completedLevel >= current && completedLevel < 5) {
-      localStorage.setItem(UNLOCKED_KEY(date), String(completedLevel + 1));
-    }
+    const next = Math.min(5, Math.max(getUnlockedLevel(), level));
+    localStorage.setItem(UNLOCKED_KEY, String(next));
   } catch {}
 }
 

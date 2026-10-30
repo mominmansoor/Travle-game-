@@ -38,7 +38,7 @@ every session gives you 5 levels and they get meaner as you go:
 | 4 | expert | 8 to 10 hops |
 | 5 | nightmare | 11 or more, through some very obscure countries |
 
-there's no limit on guesses, so you can keep going until you get there, but the fewer you use the better your efficiency score. stuck? a hint shows the next stop, and **turn back** ends the leg and shows you the route. finish or turn back on a level to unlock the next.
+there's no limit on guesses, so you can keep going until you get there, but the fewer you use the better your efficiency score. stuck? a hint shows the next stop, and **turn back** ends the leg and shows you the route. finish or turn back on a level to unlock the next, and unlocked levels stay unlocked next time you visit.
 
 <img src="docs/path-log.png" alt="the logbook showing guesses marked on course, detour and adrift" width="100%" />
 
@@ -82,7 +82,7 @@ the world is an adjacency list. countries are nodes and shared land borders are 
 
 puzzles come from a seed fed into a tiny random number generator (mulberry32). the seed is fresh every browser session so you get new routes each time you open it, and each level only picks routes inside its hop range. level 5 pulls from the weird landlocked countries on purpose.
 
-your stats sit in local storage: games played, wins, current streak, best streak and a 30 day history chart. nothing leaves your browser.
+your stats and unlocked levels sit in local storage: games played, wins, current streak, best streak and a 30 day history chart. nothing leaves your browser.
 
 ## run it yourself
 
