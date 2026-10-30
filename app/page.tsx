@@ -15,6 +15,8 @@ import {
   initLevelState,
   recordLevelResult,
   loadStats,
+  getUnlockedLevel,
+  saveUnlockedLevel,
   buildShareString,
   Guess,
   LevelState,
@@ -48,6 +50,7 @@ export default function Home() {
 
   useEffect(() => {
     setSessionSeed(getSessionSeed());
+    setUnlockedLevel(getUnlockedLevel());
     try {
       if (!localStorage.getItem(HELP_SEEN_KEY)) {
         setPanel("help");
@@ -86,6 +89,12 @@ export default function Home() {
     const copy = [...levelStates];
     copy[activeLevel - 1] = next;
     setLevelStates(copy);
+  }
+
+  /** Unlock up to `level` now and remember it for next time. */
+  function unlockUpTo(level: number) {
+    setUnlockedLevel((u) => Math.max(u, Math.min(5, level)));
+    saveUnlockedLevel(level);
   }
 
   function handleGuess(code: string, name: string): boolean {
@@ -144,7 +153,7 @@ export default function Home() {
 
     if (newStatus === "won") {
       audio.win();
-      setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
+      unlockUpTo(activeLevel + 1);
       recordLevelResult(true);
     }
     return true;
@@ -174,7 +183,7 @@ export default function Home() {
     if (!currentState || currentState.status !== "playing") return;
     audio.lose();
     updateCurrent({ ...currentState, status: "lost" });
-    setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
+    unlockUpTo(activeLevel + 1);
     recordLevelResult(false);
   }
 
