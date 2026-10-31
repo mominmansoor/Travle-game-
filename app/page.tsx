@@ -1,27 +1,33 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Terminal from "@/components/Terminal";
+import Dialog from "@/components/Dialog";
 import GuessInput from "@/components/GuessInput";
 import GuessHistory from "@/components/GuessHistory";
 import StatsChart from "@/components/StatsChart";
 import MapDisplay from "@/components/MapDisplay";
 import ThemeSelector from "@/components/ThemeSelector";
 import { useSettings } from "@/components/SettingsProvider";
-import { generatePuzzle, getSessionSeed, getTodayString, levelSeed } from "@/data/puzzles";
+import { generatePuzzle, getSessionSeed, levelSeed } from "@/data/puzzles";
 import { connectedComponent, evaluateGuess, findConnectedPath, nextStop } from "@/lib/bfs";
 import { guessOptions, isWater, nodeName } from "@/data/nodes";
 import {
   initLevelState,
   recordLevelResult,
   loadStats,
+  getUnlockedLevel,
+  saveUnlockedLevel,
   buildShareString,
   Guess,
   LevelState,
 } from "@/lib/gameState";
 import audio from "@/lib/audio";
+import {
+  IconBulb, IconCaret, IconCheck, IconClose, IconDisplay, IconFace, IconFlag, IconFolder,
+  IconGlobe, IconHelp, IconLedger, IconLock, IconRestart, IconSettings,
+} from "@/components/Icons";
 
-const LEVEL_LABELS = ["Coastal", "Inland", "Frontier", "Uncharted", "Here be dragons"];
+const LEVEL_LABELS = ["coastal", "inland", "frontier", "uncharted", "here-be-dragons"];
 const LEVEL_DIFFICULTY = ["easy", "medium", "hard", "expert", "nightmare"];
 const NUMERALS = ["I", "II", "III", "IV", "V"];
 const HELP_SEEN_KEY = "travle_help_seen";
@@ -29,10 +35,9 @@ const HELP_SEEN_KEY = "travle_help_seen";
 
 const nameOf = nodeName;
 
-type Panel = "none" | "help" | "stats" | "themes" | "settings";
+type Panel = "none" | "help" | "stats" | "themes" | "settings" | "result";
 
 export default function Home() {
-  const today = getTodayString();
   const { settings, updateSettings } = useSettings();
 
   const [sessionSeed, setSessionSeed] = useState(0);
@@ -43,11 +48,20 @@ export default function Home() {
   const [panel, setPanel] = useState<Panel>("none");
   const [shareMsg, setShareMsg] = useState("");
   const [guessError, setGuessError] = useState("");
+  const [now, setNow] = useState<Date | null>(null);
 
   const ocean = settings.oceanCrossings;
 
+  // Menu-bar clock (client only, so server and client markup agree)
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(t);
+  }, []);
+
   useEffect(() => {
     setSessionSeed(getSessionSeed());
+    setUnlockedLevel(getUnlockedLevel());
     try {
       if (!localStorage.getItem(HELP_SEEN_KEY)) {
         setPanel("help");
@@ -86,6 +100,12 @@ export default function Home() {
     const copy = [...levelStates];
     copy[activeLevel - 1] = next;
     setLevelStates(copy);
+  }
+
+  /** Unlock up to `level` now and remember it for next time. */
+  function unlockUpTo(level: number) {
+    setUnlockedLevel((u) => Math.max(u, Math.min(5, level)));
+    saveUnlockedLevel(level);
   }
 
   function handleGuess(code: string, name: string): boolean {
@@ -144,8 +164,9 @@ export default function Home() {
 
     if (newStatus === "won") {
       audio.win();
-      setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
+      unlockUpTo(activeLevel + 1);
       recordLevelResult(true);
+      setPanel("result");
     }
     return true;
   }
@@ -174,8 +195,9 @@ export default function Home() {
     if (!currentState || currentState.status !== "playing") return;
     audio.lose();
     updateCurrent({ ...currentState, status: "lost" });
-    setUnlockedLevel((u) => Math.max(u, activeLevel + 1));
+    unlockUpTo(activeLevel + 1);
     recordLevelResult(false);
+    setPanel("result");
   }
 
   function handleShare() {
@@ -227,311 +249,334 @@ export default function Home() {
   const stats = loadStats();
   const hintsUsed = currentState?.hintsUsed ?? 0;
 
-  const prettyDate = (() => {
-    const d = new Date(`${today}T12:00:00`);
-    return isNaN(d.getTime())
-      ? today
-      : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  })();
+  const dateStr = now ? now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
+  const timeStr = now ? now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
+  const status = currentState?.status;
+  const done = status === "won" || status === "lost";
+  const closePanel = () => setPanel("none");
 
   return (
-    <div className="app-shell">
-      <div className="sheet">
-        <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
-        <div className="sheet-inner">
-          {/* ── Masthead ── */}
-          <header className="masthead">
-            <div className="kicker">{prettyDate}</div>
-            <h1 className="brand">Trav<em>le</em></h1>
-            <div className="tagline">Name every border between here and there.</div>
-            <div className="flourish"><span>✦</span></div>
-            <nav className="app-nav">
+    <div>
+      {/* ── Menu bar ── */}
+      <header className="menubar">
+        <span className="brand"><IconGlobe /> Travle</span>
+        <span className="spacer" />
+        <span className="date">{dateStr}</span>
+        <span className="clock">{timeStr}</span>
+      </header>
+
+      <main className="desk">
+        <div className="window">
+          <div className="titlebar">
+            <span className="lights" aria-hidden><i /><i /><i /></span>
+            <h1>Travle</h1>
+          </div>
+
+          <div className="layout">
+            {/* ── Toolbar ── */}
+            <nav className="area-tools" aria-label="Menu">
               {(
                 [
-                  ["help", "How to play"],
-                  ["stats", "Ledger"],
-                  ["themes", "Charts"],
-                  ["settings", "Settings"],
-                ] as [Panel, string][]
-              ).map(([p, label]) => (
-                <button key={p} className={`nav-btn ${panel === p ? "on" : ""}`} onClick={() => togglePanel(p)} aria-expanded={panel === p}>
-                  {label}
+                  ["help", "How to play", IconHelp],
+                  ["stats", "Ledger", IconLedger],
+                  ["themes", "Display", IconDisplay],
+                  ["settings", "Settings", IconSettings],
+                ] as [Panel, string, (p: React.SVGProps<SVGSVGElement>) => React.ReactElement][]
+              ).map(([p, label, Icon]) => (
+                <button
+                  key={p}
+                  className={`icon-btn ${panel === p ? "on" : ""}`}
+                  onClick={() => togglePanel(p)}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon />
                 </button>
               ))}
             </nav>
-          </header>
 
-          {/* ── How to play ── */}
-          {panel === "help" && (
-            <Terminal title="How to play" className="mb-5">
-              <div className="help">
-                <p>
-                  Get from <b>where you set out</b> to <b style={{ color: "var(--warn)" }}>your destination</b> by naming the
-                  countries in between. Each one has to share a border with something you&apos;ve already linked up.
-                </p>
-                <ul>
-                  <li><span style={{ color: "var(--accent)" }}>●</span> <i>on course</i>, it touches your chain and brings you a step closer</li>
-                  <li><span style={{ color: "var(--warn)" }}>◐</span> <i>detour</i>, up to two steps off the best route</li>
-                  <li><span style={{ color: "var(--sub)" }}>○</span> <i>adrift</i>, way off, or doesn&apos;t connect at all</li>
-                </ul>
-                <p>
-                  There&apos;s no limit on guesses, but fewer is better, and each country can only be entered once. Stuck? A
-                  hint shows the next stop, or you can turn back to see the route. Turn on <b>ocean crossings</b> in settings and seas become stops
-                  too: to cross water you have to name it, e.g. United States → Bering Strait → Russia.
-                </p>
-                <div style={{ textAlign: "center" }}>
-                  <button className="btn primary" onClick={() => setPanel("none")}>Set sail</button>
-                </div>
-              </div>
-            </Terminal>
-          )}
-
-          {/* ── Settings ── */}
-          {panel === "settings" && (
-            <Terminal title="Settings" className="mb-5">
-              {(
-                [
-                  { key: "oceanCrossings", label: "Ocean crossings", hint: "Name seas and oceans to cross them. Redraws all five legs." },
-                  { key: "sounds", label: "Sounds" },
-                ] as { key: keyof typeof settings; label: string; hint?: string }[]
-              ).map(({ key, label, hint }) => (
-                <div key={key} className="setting-row">
-                  <span>
-                    <span className="label">{label}</span>
-                    {hint && <span className="setting-hint">{hint}</span>}
-                  </span>
-                  <button
-                    role="switch"
-                    aria-checked={settings[key]}
-                    onClick={() => updateSettings({ [key]: !settings[key] })}
-                    className={`btn ${settings[key] ? "on" : "quiet"}`}
-                    style={{ minWidth: 64 }}
-                  >
-                    {settings[key] ? "On" : "Off"}
-                  </button>
-                </div>
-              ))}
-              <div className="setting-row" style={{ display: "block" }}>
-                <span className="label" style={{ display: "block", marginBottom: 8 }}>Chart style</span>
-                <ThemeSelector />
-              </div>
-            </Terminal>
-          )}
-
-          {/* ── Ledger ── */}
-          {panel === "stats" && (
-            <Terminal title="The ledger" className="mb-5">
-              <div className="stat-grid">
-                <div><b>{stats.totalPlayed}</b><span>voyages</span></div>
-                <div><b style={{ color: "var(--accent)" }}>{stats.totalWon}</b><span>arrived</span></div>
-                <div>
-                  <b>{stats.totalPlayed ? Math.round((stats.totalWon / stats.totalPlayed) * 100) : 0}%</b>
-                  <span>success</span>
-                </div>
-                <div><b style={{ color: "var(--warn)" }}>{stats.currentStreak}</b><span>streak</span></div>
-                <div><b style={{ color: "var(--warn)" }}>{stats.bestStreak}</b><span>best</span></div>
-              </div>
-              <StatsChart history={stats.dayHistory} />
-            </Terminal>
-          )}
-
-          {/* ── Chart styles ── */}
-          {panel === "themes" && (
-            <Terminal title="Chart style" className="mb-5">
-              <ThemeSelector />
-            </Terminal>
-          )}
-
-          {/* ── Legs ── */}
-          <div className="level-tabs" role="tablist">
-            {[1, 2, 3, 4, 5].map((level) => {
-              const state = levelStates[level - 1];
-              const locked = level > unlockedLevel;
-              const won = state?.status === "won";
-              const lost = state?.status === "lost";
-              const active = level === activeLevel;
-
-              return (
-                <button
-                  key={level}
-                  role="tab"
-                  aria-selected={active}
-                  disabled={locked}
-                  onClick={() => !locked && switchLevel(level)}
-                  className={`level-tab ${active ? "active" : ""} ${won ? "won" : ""} ${lost ? "lost" : ""}`}
-                  title={locked ? "Finish the previous leg to unlock" : `Leg ${level}: ${LEVEL_DIFFICULTY[level - 1]}`}
-                >
-                  <span className="tab-num">{NUMERALS[level - 1]}</span>
-                  <span className="tab-name">{LEVEL_LABELS[level - 1]}</span>
-                  <span className="tab-mark">{won ? "✓" : lost ? "✕" : locked ? "🔒︎" : ""}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── Main game area ── */}
-          {currentState ? (
-            <>
-              {/* Route header */}
-              <section className="route-head">
-                <div className="kicker caps" style={{ color: "var(--sub)", fontSize: "0.8rem", letterSpacing: "0.2em" }}>
-                  Leg {NUMERALS[activeLevel - 1]} · {LEVEL_DIFFICULTY[activeLevel - 1]}
-                  {levelOcean && <> · by land &amp; sea</>}
-                </div>
-                <div className="route-line">
-                  <span className="route-start">{startName}</span>
-                  <span className="route-arrow">⟶</span>
-                  <span className="route-end">{endName}</span>
-                </div>
-
-                <div className="route-meta">
-                  <span>
-                    shortest route <b>{currentState.pathLength}</b> borders
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {totalGuesses > 0 && (
-                      <span className="meter" aria-hidden>
-                        {currentState.guesses.map((g, i) => {
-                          const ink = g.color === "green" ? "var(--accent)" : g.color === "orange" ? "var(--warn)" : "var(--sub)";
-                          return <span key={i} style={{ background: ink, borderColor: ink }} />;
-                        })}
-                      </span>
-                    )}
-                    <span style={{ whiteSpace: "nowrap" }}>
-                      <b>{totalGuesses}</b> guess{totalGuesses === 1 ? "" : "es"}
+            {/* ── Route header ── */}
+            <div className="area-route">
+              {currentState ? (
+                <>
+                  <div className="route-title">
+                    <span className="hash">#</span>
+                    <span>{startName}</span>
+                    <span className="arrow">→</span>
+                    <span className="end">{endName}</span>
+                  </div>
+                  <div className="route-meta">
+                    <span className="count">Shortest: [<b>{currentState.pathLength}</b>]</span>
+                    <span>
+                      {!done && (
+                        <button className="icon-btn" onClick={handleHint} disabled={!canHint} title="Hint: reveal the next stop" aria-label="Hint">
+                          <IconBulb />
+                        </button>
+                      )}
+                      <button className="icon-btn" onClick={handleReset} title="Start this route over" aria-label="Start over">
+                        <IconRestart />
+                      </button>
+                      {!done && (
+                        <button className="icon-btn" onClick={handleGiveUp} title="Turn back: end this leg and show the route" aria-label="Turn back">
+                          <IconFlag />
+                        </button>
+                      )}
                     </span>
-                  </span>
-                </div>
-
-                <div className="route-actions">
-                  {currentState.status === "playing" && (
-                    <button className="btn quiet" onClick={handleHint} disabled={!canHint} title="Reveal the next stop">
-                      Hint
-                    </button>
-                  )}
-                  <button className="btn quiet" onClick={handleReset} title="Restart this route">
-                    Start over
-                  </button>
-                  {currentState.status === "playing" && (
-                    <button className="btn quiet" onClick={handleGiveUp} title="End this leg and reveal the route">
-                      Turn back
-                    </button>
-                  )}
-                </div>
-
-                {activeHint > 0 && hintTarget && (
-                  <div className="hint-line">
-                    {activeHint === 1 ? (
-                      <>
-                        The next stop begins with <b>{nameOf(hintTarget)[0]}</b> and has{" "}
-                        {nameOf(hintTarget).replace(/[^A-Za-zÀ-ÿ]/g, "").length} letters.
-                        {canHint && <span style={{ color: "var(--sub)" }}> Ask again for the full name.</span>}
-                      </>
-                    ) : (
-                      <>The next stop is <b>{nameOf(hintTarget)}</b>.</>
-                    )}
                   </div>
-                )}
-              </section>
-
-              {/* Input */}
-              {currentState.status === "playing" && (
-                <div className="mb-1">
-                  <GuessInput
-                    onSubmit={handleGuess}
-                    excluded={usedCodes}
-                    options={guessOptions(levelOcean)}
-                    placeholder={levelOcean ? "Country, sea or ocean…" : undefined}
-                  />
-                  <div className="input-foot">
-                    {guessError ? (
-                      <span className="err">{guessError}</span>
-                    ) : (
-                      <span>
-                        press <kbd>/</kbd> to write · <kbd>↑</kbd><kbd>↓</kbd> to choose
-                      </span>
-                    )}
-                  </div>
-                </div>
+                </>
+              ) : (
+                <div className="route-title"><span className="hash">#</span><span className="cursor-blink">loading</span></div>
               )}
+            </div>
 
-              {/* The chart */}
-              <MapDisplay
-                key={`${activeLevel}-${puzzleIdxs[activeLevel - 1]}-${levelOcean}`}
-                guesses={currentState.guesses}
-                startCode={currentState.startCode}
-                endCode={currentState.endCode}
-                status={currentState.status}
-                optimalPath={currentState.optimalPath}
-                greenChain={currentState.greenChain}
-                ocean={levelOcean}
-              />
-
-              {/* Result */}
-              {currentState.status !== "playing" && (
-                <Terminal
-                  title={currentState.status === "won" ? "Arrived" : "Turned back"}
-                  borderColor={currentState.status === "won" ? "var(--accent)" : "var(--error)"}
-                  className="mt-6"
+            {/* ── Legs ── */}
+            <div className="area-legs">
+              <label className="select">
+                <span className="sr-only">Route type</span>
+                <select
+                  value={ocean ? "sea" : "land"}
+                  onChange={(e) => updateSettings({ oceanCrossings: e.target.value === "sea" })}
+                  aria-label="Route type"
                 >
-                  {currentState.status === "won" ? (
-                    <div className="result-grid">
-                      <div><b style={{ color: "var(--accent)" }}>{minGuesses}</b><span>best possible</span></div>
-                      <div><b>{totalGuesses}</b><span>your guesses</span></div>
-                      <div>
-                        <b style={{ color: efficiency >= 80 ? "var(--accent)" : efficiency >= 50 ? "var(--warn)" : "var(--error)" }}>
-                          {efficiency}%
-                        </b>
-                        <span>efficiency</span>
-                      </div>
-                      {hintsUsed > 0 && <div><b>{hintsUsed}</b><span>hints</span></div>}
+                  <option value="land">Overland</option>
+                  <option value="sea">Land &amp; sea</option>
+                </select>
+                <span className="caret"><IconCaret /></span>
+              </label>
+
+              <div className="tree-head">
+                <span className="box" aria-hidden />
+                <IconFolder />
+                Legs
+              </div>
+              <ul className="tree" role="tablist" aria-label="Legs">
+                {[1, 2, 3, 4, 5].map((level) => {
+                  const state = levelStates[level - 1];
+                  const locked = level > unlockedLevel;
+                  const won = state?.status === "won";
+                  const lost = state?.status === "lost";
+                  const active = level === activeLevel;
+                  const n = state?.guesses.length ?? 0;
+                  return (
+                    <li key={level}>
+                      <button
+                        role="tab"
+                        aria-selected={active}
+                        disabled={locked}
+                        onClick={() => !locked && switchLevel(level)}
+                        className={`leg ${active ? "active" : ""}`}
+                        title={locked ? "Finish the previous leg to unlock" : `Leg ${level}: ${LEVEL_DIFFICULTY[level - 1]}`}
+                      >
+                        <span className="hash">#</span>
+                        <span className="num">{NUMERALS[level - 1]}</span>
+                        <span className="name">{LEVEL_LABELS[level - 1]}</span>
+                        <span className="diff">{LEVEL_DIFFICULTY[level - 1]}</span>
+                        {locked ? (
+                          <span className="lock"><IconLock /></span>
+                        ) : won ? (
+                          <span className="badge ok" aria-label="arrived"><IconCheck /></span>
+                        ) : lost ? (
+                          <span className="badge no" aria-label="turned back"><IconClose /></span>
+                        ) : n > 0 ? (
+                          <span className="badge" aria-label={`${n} guesses`}>{n}</span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* ── Map + guess bar ── */}
+            <section className="area-main">
+              {currentState ? (
+                <>
+                  <MapDisplay
+                    key={`${activeLevel}-${puzzleIdxs[activeLevel - 1]}-${levelOcean}`}
+                    guesses={currentState.guesses}
+                    startCode={currentState.startCode}
+                    endCode={currentState.endCode}
+                    status={currentState.status}
+                    optimalPath={currentState.optimalPath}
+                    greenChain={currentState.greenChain}
+                    ocean={levelOcean}
+                  />
+
+                  {guessError ? (
+                    <div className="notice err" role="status"><span className="tag">nope</span>{guessError}</div>
+                  ) : activeHint > 0 && hintTarget ? (
+                    <div className="notice" role="status">
+                      <span className="tag">hint</span>
+                      {activeHint === 1 ? (
+                        <span>
+                          Next stop starts with <b>{nameOf(hintTarget)[0]}</b> and has{" "}
+                          {nameOf(hintTarget).replace(/[^A-Za-zÀ-ÿ]/g, "").length} letters.
+                          {canHint && " Tap the bulb again for the name."}
+                        </span>
+                      ) : (
+                        <span>Next stop is <b>{nameOf(hintTarget)}</b>.</span>
+                      )}
                     </div>
+                  ) : null}
+
+                  {!done ? (
+                    <GuessInput
+                      onSubmit={handleGuess}
+                      excluded={usedCodes}
+                      options={guessOptions(levelOcean)}
+                      placeholder={levelOcean ? "Your next country, sea or ocean" : undefined}
+                    />
                   ) : (
-                    <div className="result-verdict" style={{ color: "var(--error)" }}>You turned back after {totalGuesses} guess{totalGuesses === 1 ? "" : "es"}.</div>
+                    <div className="composer done">
+                      <span className="msg">
+                        {status === "won" ? `Arrived in ${totalGuesses} guess${totalGuesses === 1 ? "" : "es"}.` : "You turned back."}
+                      </span>
+                      <button className="btn small" onClick={() => setPanel("result")}>Result</button>
+                      <button className="btn small" onClick={handleNext}>New route</button>
+                      {activeLevel < 5 && (
+                        <button className="btn small solid" onClick={() => switchLevel(activeLevel + 1)}>Next leg →</button>
+                      )}
+                    </div>
                   )}
-
-                  <div className="route-summary">
-                    <div className="label">{currentState.status === "won" ? "your route" : "the route you were looking for"}</div>
-                    {(currentState.status === "won" ? currentState.greenChain : currentState.optimalPath).map((c, i) => (
-                      <React.Fragment key={c}>
-                        {i > 0 && <span className="sep">→</span>}
-                        <span style={{ whiteSpace: "nowrap", fontStyle: isWater(c) ? "italic" : undefined }}>{nameOf(c)}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-
-                  <div className="emoji-trail">
-                    {currentState.guesses.map((g) => (g.color === "green" ? "🟩" : g.color === "orange" ? "🟧" : "⬜")).join("")}
-                  </div>
-
-                  <div className="result-actions">
-                    <button className="btn primary" onClick={handleShare}>{shareMsg || "Share"}</button>
-                    {activeLevel < 5 && (
-                      <button className="btn" onClick={() => switchLevel(activeLevel + 1)}>Next leg →</button>
-                    )}
-                    <button className="btn quiet" onClick={handleNext}>New route</button>
-                  </div>
-                </Terminal>
+                </>
+              ) : (
+                <div className="loading cursor-blink">Booting map</div>
               )}
+            </section>
 
-              {/* Logbook */}
-              <Terminal title="Logbook" right={`${totalGuesses} entr${totalGuesses === 1 ? "y" : "ies"}`} plain className="mt-6">
+            {/* ── Logbook ── */}
+            <aside className="area-log">
+              {currentState && (
                 <GuessHistory
                   guesses={currentState.guesses}
                   startName={startName}
                   endName={endName}
                   greenChain={currentState.greenChain}
                 />
-              </Terminal>
-            </>
-          ) : (
-            <p style={{ textAlign: "center", fontStyle: "italic", color: "var(--sub)", padding: "40px 0" }}>
-              Unrolling the chart…
-            </p>
-          )}
+              )}
+            </aside>
+
+            {/* ── Status bar ── */}
+            <footer className="area-status">
+              <span className="inv"><IconFace /> leg {NUMERALS[activeLevel - 1]}</span>
+              <span>{totalGuesses} guess{totalGuesses === 1 ? "" : "es"}</span>
+              <span className="wide">best {minGuesses}</span>
+              <span className="wide">hints {hintsUsed}</span>
+              <span className="fill" />
+              <span>{status === "won" ? "arrived" : status === "lost" ? "turned back" : levelOcean ? "land + sea" : "overland"}</span>
+            </footer>
+          </div>
         </div>
-      </div>
-      <div className="foot-note">A new set of routes every visit · progress stays in your browser</div>
+      </main>
+
+      {/* ── Dialogs ── */}
+      {panel === "help" && (
+        <Dialog title="How to play" onClose={closePanel}>
+          <div className="help">
+            <p>
+              Get from the <b>start</b> to the <b>destination</b>{" "}by naming the countries in between. Each one has to
+              share a border with something you&apos;ve already linked up.
+            </p>
+            <ul>
+              <li><i className="sw-on" /> <span><b>on course</b>: touches your chain and gets you a step closer</span></li>
+              <li><i className="sw-detour" /> <span><b>detour</b>: up to two steps off the best route</span></li>
+              <li><i className="sw-adrift" /> <span><b>adrift</b>: way off, or not connected at all</span></li>
+            </ul>
+            <p>
+              There&apos;s no guess limit, but fewer is better, and each country can only be entered once. The bulb gives a
+              hint, the flag turns back and shows you the route. Switch to <b>Land &amp; sea</b> and seas become stops
+              too: United States → Bering Strait → Russia.
+            </p>
+            <p>
+              Press <kbd>/</kbd> to start typing from anywhere, <kbd>↑</kbd><kbd>↓</kbd> to pick, <kbd>⏎</kbd> to go.
+            </p>
+            <div className="actions"><button className="btn solid" onClick={closePanel}>Let&apos;s go</button></div>
+          </div>
+        </Dialog>
+      )}
+
+      {panel === "stats" && (
+        <Dialog title="Ledger" onClose={closePanel}>
+          <div className="tiles">
+            <div className="tile"><b>{stats.totalPlayed}</b><span>played</span></div>
+            <div className="tile"><b>{stats.totalWon}</b><span>arrived</span></div>
+            <div className="tile">
+              <b>{stats.totalPlayed ? Math.round((stats.totalWon / stats.totalPlayed) * 100) : 0}%</b>
+              <span>success</span>
+            </div>
+            <div className="tile"><b>{stats.currentStreak}</b><span>streak</span></div>
+            <div className="tile"><b>{stats.bestStreak}</b><span>best streak</span></div>
+          </div>
+          <StatsChart history={stats.dayHistory} />
+        </Dialog>
+      )}
+
+      {panel === "themes" && (
+        <Dialog title="Display" onClose={closePanel}>
+          <ThemeSelector />
+        </Dialog>
+      )}
+
+      {panel === "settings" && (
+        <Dialog title="Settings" onClose={closePanel}>
+          {(
+            [
+              { key: "sounds", label: "Sounds", hint: "Little beeps for each guess." },
+              { key: "oceanCrossings", label: "Land & sea", hint: "Seas and oceans become stops you can name. Redraws all five legs." },
+            ] as { key: keyof typeof settings; label: string; hint: string }[]
+          ).map(({ key, label, hint }) => (
+            <label key={key} className="check-row">
+              <input type="checkbox" checked={settings[key]} onChange={() => updateSettings({ [key]: !settings[key] })} />
+              <span className="check"><IconCheck /></span>
+              <span>
+                <span className="label">{label}</span>
+                <span className="sub">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </Dialog>
+      )}
+
+      {panel === "result" && currentState && done && (
+        <Dialog title={status === "won" ? "Arrived" : "Turned back"} onClose={closePanel} inverse>
+          <p className="big-line">{status === "won" ? "You made it." : "Back to port."}</p>
+          <p className="lede">
+            {startName} to {endName}
+            {status === "won"
+              ? ` in ${totalGuesses} guess${totalGuesses === 1 ? "" : "es"}. The best possible was ${minGuesses}.`
+              : ` after ${totalGuesses} guess${totalGuesses === 1 ? "" : "es"}. Here's the way through.`}
+          </p>
+          {status === "won" && (
+            <div className="tiles">
+              <div className="tile"><b>{totalGuesses}</b><span>guesses</span></div>
+              <div className="tile"><b>{minGuesses}</b><span>best possible</span></div>
+              <div className="tile"><b>{efficiency}%</b><span>efficiency</span></div>
+              {hintsUsed > 0 && <div className="tile"><b>{hintsUsed}</b><span>hints</span></div>}
+            </div>
+          )}
+          <div className="route-chain">
+            <span className="k">{status === "won" ? "your route" : "the route"}</span>
+            {(status === "won" ? currentState.greenChain : currentState.optimalPath).map((c, i) => (
+              <React.Fragment key={c}>
+                {i > 0 && <span className="sep">→</span>}
+                <span style={{ whiteSpace: "nowrap" }}>{isWater(c) ? `≈ ${nameOf(c)}` : nameOf(c)}</span>
+              </React.Fragment>
+            ))}
+          </div>
+          {totalGuesses > 0 && (
+            <div className="trail" aria-hidden>
+              {currentState.guesses.map((g, i) => (
+                <i key={i} className={g.color === "green" ? "sw-on" : g.color === "orange" ? "sw-detour" : "sw-adrift"} />
+              ))}
+            </div>
+          )}
+          <div className="actions">
+            <button className="btn solid" onClick={handleShare}>{shareMsg || "Share"}</button>
+            {activeLevel < 5 && <button className="btn" onClick={() => switchLevel(activeLevel + 1)}>Next leg →</button>}
+            <button className="btn" onClick={() => { handleNext(); closePanel(); }}>New route</button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

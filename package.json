@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fontsource/pixelify-sans": "^5.3.0",
+    "@fontsource/rubik": "^5.3.0",
     "@types/react-simple-maps": "^3.0.6",
     "d3-geo": "^2.0.2",
     "next": "^16",

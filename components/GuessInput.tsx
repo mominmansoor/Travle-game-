@@ -120,47 +120,42 @@ export default function GuessInput({ onSubmit, disabled, placeholder, excluded, 
   }
 
   return (
-    <div className="guess-wrap">
-      <div className={`guess-box ${shaking ? "shake" : ""}`}>
-        <span className="compass" aria-hidden>✦</span>
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder={placeholder ?? "Name a country…"}
-          style={{ fontSize: "max(16px, 1.35rem)" /* ≥16px stops iOS zooming in on focus */ }}
-          aria-label="Country name"
-          aria-autocomplete="list"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <button className="btn primary" onClick={submitCurrent} disabled={disabled || !value.trim()}>
-          Set course
-        </button>
-      </div>
-
-      {/* Autocomplete dropdown */}
+    <div className={`composer ${shaking ? "shake" : ""}`}>
       {suggestions.length > 0 && (
         <div className="suggestions" role="listbox">
           {suggestions.map((c, i) => (
             <div
               key={c.code}
+              onMouseDown={(e) => e.preventDefault() /* keep focus in the input */}
               onClick={() => selectSuggestion(c)}
               role="option"
               aria-selected={i === selectedIdx}
               className={`suggestion ${i === selectedIdx ? "on" : ""}`}
               onMouseEnter={() => setSelectedIdx(i)}
             >
-              <span className="mark">{i === selectedIdx ? "➤" : ""}</span>
               <span>{c.name}</span>
-              {c.water && <span className="water">≈ waters</span>}
+              {c.water && <span className="water">≈ water</span>}
             </div>
           ))}
         </div>
       )}
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        placeholder={placeholder ?? "Your next country"}
+        aria-label="Country name"
+        aria-autocomplete="list"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <span className="keys" aria-hidden>↑↓ pick · ⏎ go</span>
+      <button className="btn" onClick={submitCurrent} disabled={disabled || !value.trim()}>
+        Go
+      </button>
     </div>
   );
 }
