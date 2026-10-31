@@ -2,7 +2,7 @@
 
 # travle
 
-**a geography puzzle game drawn like an old printed chart**
+**a geography puzzle game that lives in a little retro desktop**
 
 get from one country to another by naming the countries in between
 
@@ -14,7 +14,7 @@ get from one country to another by naming the countries in between
 
 <br /><br />
 
-<img src="docs/hero.png" alt="a leg from Italy to Serbia on parchment, with Austria inked in green and a red pin on the destination" width="100%" />
+<img src="docs/hero.png" alt="the game window on a green desktop: a leg from Italy to Serbia with Austria on course, Greece adrift and a pixel pin on the destination" width="100%" />
 
 </div>
 
@@ -40,7 +40,7 @@ every session gives you 5 levels and they get meaner as you go:
 
 there's no limit on guesses, so you can keep going until you get there, but the fewer you use the better your efficiency score. stuck? a hint shows the next stop, and **turn back** ends the leg and shows you the route. finish or turn back on a level to unlock the next, and unlocked levels stay unlocked next time you visit.
 
-<img src="docs/path-log.png" alt="the logbook showing guesses marked on course, detour and adrift" width="100%" />
+<img src="docs/path-log.png" alt="the end-of-leg dialog after arriving in Serbia, with guesses, best possible and the route taken" width="100%" />
 
 every guess gets a colour so you know how you're doing, measured from everything you've already linked to the start:
 
@@ -62,17 +62,19 @@ there are 32 of them, from the five oceans down to straits like Gibraltar, and c
 
 ### the map
 
-it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with inked route lines (dotted for sea hops), your start gets a flag and the destination a red pin, hovering a country you've revealed shows its name, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as dots. drag to pan, ctrl+scroll or pinch to zoom, and **Fit** snaps back to your route.
+it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with route lines (dashed for sea hops), your start gets a pixel flag and the destination a pixel pin, hovering a country you've revealed shows its name, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as little squares. drag to pan, ctrl+scroll or pinch to zoom, and **Fit** snaps back to your route.
 
 ## the look
 
-everything sits on one sheet of paper inside a double ruled border: serif lettering, a logbook for your guesses, a cartouche and compass rose on the map, and the five levels set out as legs of a voyage, from *Coastal* to *Here be dragons*. the style takes its cue from [Farflung](https://farflung.game/).
+the whole game is one window sitting on a flat desktop, a bit like an old Mac or a 1-bit handheld: thick ink outlines, hard drop shadows, dithered patterns and pixel lettering. the left side holds the five levels as a file tree (`# coastal` through `# here-be-dragons`) with the logbook of your guesses underneath, the map and guess bar sit on the right, and a status bar runs along the bottom. help, stats, display and settings open as popup windows.
 
-there are six chart styles to pick from: parchment, admiralty, sepia, verdigris, night chart and blueprint.
+on the map, each kind of guess has its own pattern as well as its own colour (solid for on course, stripes for a detour, a dot dither for adrift), so it still reads in the near-monochrome palettes.
 
-<img src="docs/themes.png" alt="the same leg in all six chart styles" width="100%" />
+there are five palettes in the display menu: desktop, inbox, midnight, beige box and blueprint.
 
-<sub>parchment, admiralty, sepia / verdigris, night chart, blueprint</sub>
+<img src="docs/themes.png" alt="the same leg in all five palettes" width="100%" />
+
+<sub>desktop, inbox, midnight / beige box, blueprint</sub>
 
 sound effects are still there, toggleable in settings.
 
@@ -99,8 +101,8 @@ then open http://localhost:3000
 
 ```
 app/          the page and layout
-components/   map, guess input, logbook, stats chart, panel frame, chart style picker
-data/         countries, border data, sea links, puzzle generation, chart styles
+components/   map, guess bar, logbook, ledger chart, dialog window, icons, palette picker
+data/         countries, border data, sea links, puzzle generation, palettes
 lib/          BFS pathfinding, game state, audio, theme handling
 docs/         the screenshots in this readme
 ```

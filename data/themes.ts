@@ -1,73 +1,59 @@
 /**
- * Palettes are named after the kinds of charts they imitate.
+ * Each palette is a little desktop: the wallpaper, the window paper, and
+ * one ink. Map states lean on patterns (solid, stripes, dither) as much as
+ * colour, so even the near-monochrome palette stays readable.
  *
- * bg / bgAlt  the paper, and a slightly deeper card stock for panels
- * text / sub  the ink, and faded ink for secondary marks
- * accent      "on course" guesses and the finished route
- * warn        detours, and the target pin
- * error       wrong turns and game over
- * sea / land  the two washes the map is printed with
+ * desk    wallpaper behind the window
+ * paper   window background, land on the map
+ * ink     outlines, text, hard shadows
+ * sub     greyed-out text and the "adrift" dither
+ * accent  on-course guesses and the finished route
+ * warn    detours, the destination pin, errors
+ * hi      small highlights (the start flag)
+ * shadow  the hard drop shadow (usually the ink)
  */
 export interface Theme {
   name: string;
   dark?: boolean;
-  bg: string;
-  bgAlt: string;
-  text: string;
+  desk: string;
+  paper: string;
+  ink: string;
   sub: string;
   accent: string;
-  error: string;
   warn: string;
-  sea: string;
-  land: string;
+  hi: string;
+  shadow: string;
 }
 
 export const themes: Theme[] = [
   {
-    name: "parchment",
-    bg: "#f4e9cd", bgAlt: "#ece0bf",
-    text: "#2b2418", sub: "#8c7b5a",
-    accent: "#3d6b45", error: "#a8322a", warn: "#b5542c",
-    sea: "#cfdcd0", land: "#efe2c2",
+    name: "desktop",
+    desk: "#7bc672", paper: "#f7f2e6", ink: "#262624", sub: "#a39f94",
+    accent: "#6fbf66", warn: "#ec8a3c", hi: "#f2d14c", shadow: "#262624",
   },
   {
-    name: "admiralty",
-    bg: "#eef0e8", bgAlt: "#e2e6da",
-    text: "#1d2b3a", sub: "#7f8b92",
-    accent: "#2f6a5b", error: "#9e2f37", warn: "#c0661f",
-    sea: "#c7dbe3", land: "#f2f1e6",
+    name: "inbox",
+    desk: "#33363c", paper: "#ebe5cf", ink: "#2b2d32", sub: "#8e8a7b",
+    accent: "#8d9469", warn: "#2b2d32", hi: "#ebe5cf", shadow: "#17181b",
   },
   {
-    name: "sepia",
-    bg: "#efe1c6", bgAlt: "#e5d3b2",
-    text: "#3a2614", sub: "#9a7b56",
-    accent: "#6b6a2a", error: "#93321f", warn: "#a6561f",
-    sea: "#dccdaa", land: "#f3e6cb",
-  },
-  {
-    name: "verdigris",
-    bg: "#f1ead6", bgAlt: "#e6dec5",
-    text: "#22302b", sub: "#85907f",
-    accent: "#2c7466", error: "#a3392f", warn: "#b77a1f",
-    sea: "#bcd7cd", land: "#f4ecd7",
-  },
-  {
-    name: "night chart",
+    name: "midnight",
     dark: true,
-    bg: "#151b24", bgAlt: "#1c2430",
-    text: "#e8dfc8", sub: "#6d7686",
-    accent: "#8fbf8a", error: "#e0705f", warn: "#e3a253",
-    sea: "#121821", land: "#263142",
+    desk: "#d9e3d1", paper: "#0f1b25", ink: "#dfe9d5", sub: "#5c6d76",
+    accent: "#e3c254", warn: "#ee8d52", hi: "#e3c254", shadow: "#0a1219",
+  },
+  {
+    name: "beige box",
+    desk: "#cdc4b1", paper: "#f0eadd", ink: "#3a3835", sub: "#9d978b",
+    accent: "#5aae49", warn: "#e1772c", hi: "#f0c443", shadow: "#3a3835",
   },
   {
     name: "blueprint",
     dark: true,
-    bg: "#173a5e", bgAlt: "#1d4670",
-    text: "#eef3f7", sub: "#7f9fbd",
-    accent: "#9fe0c4", error: "#ff8f80", warn: "#ffd27a",
-    sea: "#163656", land: "#24527f",
+    desk: "#e9e4d8", paper: "#1f4e8c", ink: "#f2efe6", sub: "#7d9cc6",
+    accent: "#8fdcb0", warn: "#ffcf5a", hi: "#ffcf5a", shadow: "#123056",
   },
 ];
 
 export const themeMap = new Map<string, Theme>(themes.map((t) => [t.name, t]));
-export const DEFAULT_THEME = "parchment";
+export const DEFAULT_THEME = "desktop";

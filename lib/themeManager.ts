@@ -3,15 +3,14 @@ import { themes, themeMap, DEFAULT_THEME, Theme } from "@/data/themes";
 const THEME_KEY = "travle-theme";
 
 const VARS: [string, keyof Theme][] = [
-  ["--bg", "bg"],
-  ["--bg-alt", "bgAlt"],
-  ["--text", "text"],
+  ["--desk", "desk"],
+  ["--paper", "paper"],
+  ["--ink", "ink"],
   ["--sub", "sub"],
   ["--accent", "accent"],
-  ["--error", "error"],
   ["--warn", "warn"],
-  ["--sea", "sea"],
-  ["--land", "land"],
+  ["--hi", "hi"],
+  ["--shadow", "shadow"],
 ];
 
 export function applyTheme(name: string): void {
@@ -19,26 +18,32 @@ export function applyTheme(name: string): void {
   const r = document.documentElement;
   for (const [v, k] of VARS) r.style.setProperty(v, String(theme[k]));
   r.dataset.tone = theme.dark ? "dark" : "light";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.bg);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.desk);
 }
 
-/** Saved theme, falling back to the default if it's an old (terminal-era) name. */
+/** Saved theme, falling back to the default if it's an old or unknown name. */
 export function getSavedTheme(): string {
   if (typeof window === "undefined") return DEFAULT_THEME;
-  const saved = localStorage.getItem(THEME_KEY);
-  return saved && themeMap.has(saved) ? saved : DEFAULT_THEME;
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved && themeMap.has(saved) ? saved : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
 }
 
 export function saveTheme(name: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(THEME_KEY, name);
+  try {
+    localStorage.setItem(THEME_KEY, name);
+  } catch {}
 }
 
 export function initTheme(): void {
   applyTheme(getSavedTheme());
 }
 
-// Inline script string for layout.tsx so the right paper is down before first paint.
+// Inline script for layout.tsx so the right palette is down before first paint.
 export function buildThemeInitScript(): string {
   const data = themes.map((t) => [t.name, t.dark ? 1 : 0, ...VARS.map(([, k]) => t[k])]);
   return `(function(){try{
