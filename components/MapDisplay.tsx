@@ -92,10 +92,23 @@ export default function MapDisplay({
   // SVG units per screen pixel — keeps labels and dots readable on phones,
   // where the 800-unit-wide map is squeezed into ~360px.
   const [px, setPx] = useState(1);
+  // Frame height in map units. Wide screens use the classic 800×420; on a
+  // phone the frame grows taller (up to ~42% of the screen) so the map isn't
+  // a thin strip.
+  const [mapH, setMapH] = useState(MAP_HEIGHT);
+  const mapHRef = useRef(MAP_HEIGHT);
+  mapHRef.current = mapH;
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setPx(Math.min(2.4, Math.max(0.6, MAP_WIDTH / (el.clientWidth || MAP_WIDTH)))));
+    const measure = () => {
+      const cw = el.clientWidth || MAP_WIDTH;
+      setPx(Math.min(2.4, Math.max(0.6, MAP_WIDTH / cw)));
+      const wantPx = Math.min(cw * 0.85, window.innerHeight * 0.42);
+      setMapH(Math.round(Math.min(720, Math.max(MAP_HEIGHT, (MAP_WIDTH * wantPx) / cw))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -103,7 +116,7 @@ export default function MapDisplay({
   // ── Camera ───────────────────────────────────────────────────────────────
   const animateTo = useCallback((rawTarget: View) => {
     if (tweenRef.current) cancelAnimationFrame(tweenRef.current);
-    const target = clampView(rawTarget);
+    const target = clampView(rawTarget, mapHRef.current);
     const from = viewRef.current;
     const t0 = performance.now();
     const step = (now: number) => {
@@ -132,14 +145,14 @@ export default function MapDisplay({
 
   const fitRoute = useCallback(() => {
     setFollow(true);
-    animateTo(fitView(routeCodes, AUTO_FIT_MAX));
+    animateTo(fitView(routeCodes, AUTO_FIT_MAX, mapHRef.current));
   }, [routeCodes, animateTo]);
 
   // Frame the route on load and after every guess (unless the player has
   // taken the camera themselves — FIT hands it back).
   useEffect(() => {
-    if (follow) animateTo(fitView(routeCodes, AUTO_FIT_MAX));
-  }, [routeCodes]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (follow) animateTo(fitView(routeCodes, AUTO_FIT_MAX, mapH));
+  }, [routeCodes, mapH]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMoveStart = useCallback(() => {
     if (tweenRef.current) {
@@ -261,6 +274,7 @@ export default function MapDisplay({
                 geography={geo}
                 className={s.className}
                 onMouseMove={(e: React.MouseEvent) => trackPointer(a2, e)}
+                onClick={(e: React.MouseEvent) => trackPointer(a2, e)}
                 onMouseLeave={() => setHover(null)}
                 style={{
                   default: shared,
@@ -320,7 +334,7 @@ export default function MapDisplay({
           projection="geoEqualEarth"
           projectionConfig={{ scale: MAP_SCALE }}
           width={MAP_WIDTH}
-          height={MAP_HEIGHT}
+          height={mapH}
           style={{ width: "100%", height: "auto", display: "block" }}
         >
           <defs>
@@ -419,7 +433,7 @@ export default function MapDisplay({
             {startGeo && (
               <Marker key={`start-${startCode}`} coordinates={startGeo.anchor} style={{ default: noHit }}>
                 <PixelSprite art={FLAG} anchor={[0, 13]} scale={2 * u} palette={{ X: colors.ink, F: colors.hi }} haloColor={colors.paper} />
-                <NameTag text={nameOf(startCode)} x={20 * u} y={-26 * u} u={u} colors={colors} />
+                <NameTag text={nameOf(startCode)} x={-6 * u} y={-26 * u} u={u} colors={colors} side="left" />
               </Marker>
             )}
             {endGeo && (
@@ -453,7 +467,8 @@ export default function MapDisplay({
         <span><i className="sw-detour" /> detour</span>
         <span><i className="sw-adrift" /> adrift</span>
         {status === "lost" && <span><i style={{ background: "repeating-linear-gradient(-45deg, var(--accent) 0 2px, var(--paper) 2px 4px)" }} /> best route</span>}
-        <span className="hint">drag · ctrl+scroll to zoom</span>
+        <span className="hint hint-mouse">drag · ctrl+scroll to zoom</span>
+        <span className="hint hint-touch">tap a country to name it · pinch to zoom</span>
       </div>
     </div>
   );
@@ -543,7 +558,9 @@ function NameTag({
   u,
   colors,
   accent,
+  side = "right",
 }: {
+  side?: "left" | "right";
   text: string;
   x: number;
   y: number;
@@ -556,6 +573,9 @@ function NameTag({
   const padX = 6 * u;
   const h = fs + 8 * u;
   const w = tw + padX * 2;
+  // A left-hand tag ends at x, so the start's tag and the destination's tag
+  // sit on opposite sides and don't pile up when the two are neighbours.
+  if (side === "left") x = x - w;
   return (
     <g style={{ pointerEvents: "none" }} shapeRendering="crispEdges">
       <rect x={x + 2.5 * u} y={y + 2.5 * u} width={w} height={h} rx={2 * u} fill={colors.shadow} />

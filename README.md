@@ -68,6 +68,8 @@ it zooms in to frame your route and follows along as you guess, so a round throu
 
 the whole game is one window sitting on a flat desktop, a bit like an old Mac or a 1-bit handheld: thick ink outlines, hard drop shadows, dithered patterns and pixel lettering. the left side holds the five levels as a file tree (`# coastal` through `# here-be-dragons`) with the logbook of your guesses underneath, the map and guess bar sit on the right, and a status bar runs along the bottom. help, stats, display and settings open as popup windows.
 
+on a phone it rearranges itself: the menu buttons move into the title bar, the map gets taller, the guess bar sits right under it, the levels turn into a row of tiles, and popups slide up from the bottom. tap a country you've revealed to see its name, and pinch to zoom.
+
 on the map, each kind of guess has its own pattern as well as its own colour (solid for on course, stripes for a detour, a dot dither for adrift), so it still reads in the near-monochrome palettes.
 
 there are five palettes in the display menu: desktop, inbox, midnight, beige box and blueprint.

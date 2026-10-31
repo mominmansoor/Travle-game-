@@ -255,6 +255,25 @@ export default function Home() {
   const done = status === "won" || status === "lost";
   const closePanel = () => setPanel("none");
 
+  const navButtons = (
+    [
+      ["help", "How to play", IconHelp],
+      ["stats", "Ledger", IconLedger],
+      ["themes", "Display", IconDisplay],
+      ["settings", "Settings", IconSettings],
+    ] as [Panel, string, (p: React.SVGProps<SVGSVGElement>) => React.ReactElement][]
+  ).map(([p, label, Icon]) => (
+    <button
+      key={p}
+      className={`icon-btn ${panel === p ? "on" : ""}`}
+      onClick={() => togglePanel(p)}
+      title={label}
+      aria-label={label}
+    >
+      <Icon />
+    </button>
+  ));
+
   return (
     <div>
       {/* ── Menu bar ── */}
@@ -270,30 +289,12 @@ export default function Home() {
           <div className="titlebar">
             <span className="lights" aria-hidden><i /><i /><i /></span>
             <h1>Travle</h1>
+            <nav className="titlebar-tools" aria-label="Menu">{navButtons}</nav>
           </div>
 
           <div className="layout">
-            {/* ── Toolbar ── */}
-            <nav className="area-tools" aria-label="Menu">
-              {(
-                [
-                  ["help", "How to play", IconHelp],
-                  ["stats", "Ledger", IconLedger],
-                  ["themes", "Display", IconDisplay],
-                  ["settings", "Settings", IconSettings],
-                ] as [Panel, string, (p: React.SVGProps<SVGSVGElement>) => React.ReactElement][]
-              ).map(([p, label, Icon]) => (
-                <button
-                  key={p}
-                  className={`icon-btn ${panel === p ? "on" : ""}`}
-                  onClick={() => togglePanel(p)}
-                  title={label}
-                  aria-label={label}
-                >
-                  <Icon />
-                </button>
-              ))}
-            </nav>
+            {/* ── Toolbar (desktop; on phones the same buttons sit in the title bar) ── */}
+            <nav className="area-tools" aria-label="Menu">{navButtons}</nav>
 
             {/* ── Route header ── */}
             <div className="area-route">
@@ -364,7 +365,7 @@ export default function Home() {
                         aria-selected={active}
                         disabled={locked}
                         onClick={() => !locked && switchLevel(level)}
-                        className={`leg ${active ? "active" : ""}`}
+                        className={`leg ${active ? "active" : ""} ${won ? "won" : ""} ${lost ? "lost" : ""}`}
                         title={locked ? "Finish the previous leg to unlock" : `Leg ${level}: ${LEVEL_DIFFICULTY[level - 1]}`}
                       >
                         <span className="hash">#</span>

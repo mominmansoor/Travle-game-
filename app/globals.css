@@ -99,6 +99,7 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
   border-bottom: var(--line) solid var(--ink);
 }
 .titlebar h1 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
+.titlebar-tools { display: none; position: absolute; right: 6px; gap: 0; }
 .lights { position: absolute; left: 16px; display: flex; gap: 5px; }
 .lights i {
   width: 17px;
@@ -391,7 +392,11 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-legend i { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 2px; }
 .map-legend .hint { margin-left: auto; color: var(--sub); }
-@media (hover: none) { .map-legend .hint { display: none; } }
+.map-legend .hint-touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .map-legend .hint-mouse { display: none; }
+  .map-legend .hint-touch { display: inline-flex; }
+}
 
 .notice {
   margin: 12px 14px 0;
@@ -517,6 +522,7 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
 .dialog {
   width: min(560px, 100%);
   max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   background: var(--paper);
@@ -644,51 +650,85 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
 
 /* ── Narrow screens ───────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
-  .desk { padding: 14px 10px 36px; }
-  .window { border-radius: 10px; box-shadow: 6px 6px 0 var(--shadow); }
-  .menubar .date { display: none; }
+  /* every pixel goes to the game: no menu bar, thin wallpaper margin */
+  .menubar { display: none; }
+  .desk { padding: 8px 8px calc(20px + env(safe-area-inset-bottom)); }
+  .window { border-radius: 10px; box-shadow: 4px 4px 0 var(--shadow); }
 
+  .titlebar { height: 48px; justify-content: flex-start; padding-left: 70px; }
+  .titlebar h1 { font-size: 1.15rem; }
+  .lights { left: 12px; gap: 4px; }
+  .lights i { width: 14px; height: 14px; }
+  .titlebar-tools { display: flex; }
+  .titlebar-tools .icon-btn { width: 40px; height: 40px; }
+
+  /* order: route → map + guess bar → legs → logbook → status */
   .layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
-    grid-template-areas: "tools" "route" "legs" "main" "log" "status";
+    grid-template-areas: "route" "main" "legs" "log" "status";
   }
-  .area-tools, .area-legs, .area-log { border-right: none; }
-  .area-tools { height: 48px; justify-content: center; }
-  .area-route { padding: 10px 12px; }
-  .route-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+  .area-tools { display: none; }
+  .area-legs, .area-log { border-right: none; }
 
-  .area-legs { padding: 12px 12px 12px; border-bottom: var(--line) solid var(--ink); }
+  .area-route { padding: 4px 4px 4px 12px; min-height: 50px; flex-wrap: nowrap; gap: 6px; }
+  .route-title { font-size: 1.05rem; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; flex: 1; }
+  .route-title > span:not(.hash) { overflow: hidden; text-overflow: ellipsis; }
+  .route-meta { margin-left: 0; }
+  .route-meta .count { display: none; }
+  .route-meta .icon-btn { width: 42px; height: 42px; }
+
+  .map-legend { font-size: 0.82rem; gap: 2px 12px; padding: 7px 12px; }
+
+  .notice { margin: 10px 10px 0; font-size: 0.95rem; }
+  .composer { padding: 10px 10px 10px 14px; }
+  .composer .keys { display: none; }
+  .composer .btn { min-height: 44px; padding: 0 22px; }
+  .composer.done { gap: 8px; }
+  .composer.done .msg { width: 100%; }
+  .composer.done .btn { flex: 1; }
+  .suggestion { padding: 9px 12px; font-size: 1.05rem; }
+
+  .area-legs { padding: 14px 12px; border-top: var(--line) solid var(--ink); }
   .area-legs .select { margin-bottom: 12px; }
   .area-legs .tree-head { display: none; }
-  .area-legs .tree { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0; border: none; }
+  .area-legs .tree { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0; }
   .area-legs .tree li::before, .area-legs .tree li::after { display: none; }
   .area-legs .leg {
     flex-direction: column;
     gap: 2px;
+    min-height: 52px;
     padding: 6px 2px 5px;
     border: var(--line) solid var(--ink);
     border-radius: 7px;
+    justify-content: center;
     text-align: center;
     font-size: 0.78rem;
   }
   .area-legs .leg.active { background: var(--ink); color: var(--paper); }
-  .area-legs .leg .hash { display: none; }
-  .area-legs .leg .num { font-family: var(--pixel); font-size: 1.1rem; line-height: 1; }
-  .area-legs .leg .name { display: none; }
+  .area-legs .leg.won { background: var(--accent); color: var(--ink); }
+  .area-legs .leg.lost { background: repeating-conic-gradient(color-mix(in srgb, var(--ink) 22%, var(--paper)) 0 25%, var(--paper) 0 50%) 0 0 / 4px 4px; color: var(--ink); }
+  .area-legs .leg.active { box-shadow: inset 0 0 0 2.5px var(--paper), 0 0 0 0 transparent; }
+  .area-legs .leg.active:not(.won):not(.lost) { background: var(--ink); color: var(--paper); box-shadow: none; }
+  .area-legs .leg .hash, .area-legs .leg .name, .area-legs .leg .badge, .area-legs .leg .lock { display: none; }
+  .area-legs .leg .num { font-family: var(--pixel); font-size: 1.15rem; line-height: 1; }
   .area-legs .leg .diff { line-height: 1.1; }
-  .area-legs .leg .badge, .area-legs .leg .lock { display: none; }
 
   .area-log { min-height: 0; border-top: var(--line) solid var(--ink); }
-  .log-scroll { position: static; max-height: 280px; padding-top: 10px; }
+  .log-scroll { position: static; max-height: 300px; padding-top: 10px; }
 
-  .composer .keys { display: none; }
   .area-status { font-size: 0.85rem; }
   .area-status > span { padding: 0 9px; }
   .area-status .wide { display: none; }
 
-  .map-controls { top: 6px; right: 6px; gap: 4px; }
-  .map-controls button { height: 26px; min-width: 26px; padding: 0 6px; font-size: 0.82rem; }
+  .map-controls { top: 8px; right: 8px; gap: 5px; }
+  .map-controls button { height: 34px; min-width: 34px; padding: 0 9px; font-size: 0.9rem; }
+
+  .scrim { padding: 10px; align-items: end; }
+  .dialog { max-height: calc(100dvh - 20px); }
+  .dialog-body { padding: 16px; }
+  .dialog .actions .btn { flex: 1; }
+  .big-line { font-size: 1.6rem; }
 }
 @media (min-width: 861px) {
   .leg .num, .leg .diff { display: none; }

@@ -112,11 +112,11 @@ const [[SX0, SY0], [SX1, SY1]] = geoPath(projection).bounds({ type: "Sphere" });
  * Keep a view inside the globe's edges so zooming to a far-north route
  * (Russia, Canada…) doesn't leave a band of empty space above the map.
  */
-export function clampView(v: { center: [number, number]; zoom: number }) {
+export function clampView(v: { center: [number, number]; zoom: number }, height = MAP_HEIGHT) {
   const xy = projection(v.center);
   if (!xy) return v;
   const halfW = MAP_WIDTH / (2 * v.zoom);
-  const halfH = MAP_HEIGHT / (2 * v.zoom);
+  const halfH = height / (2 * v.zoom);
   const clamp = (val: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, val)));
   const cx = clamp(xy[0], SX0 + halfW, SX1 - halfW);
   const cy = clamp(xy[1], SY0 + halfH, SY1 - halfH);
@@ -126,10 +126,12 @@ export function clampView(v: { center: [number, number]; zoom: number }) {
 
 /**
  * Centre + zoom that frames all of `codes` inside the map with some padding.
+ * `height` is the map frame's height in map units (taller on phones).
  */
 export function fitView(
   codes: string[],
-  maxZoom: number
+  maxZoom: number,
+  height = MAP_HEIGHT
 ): { center: [number, number]; zoom: number } {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const code of codes) {
@@ -151,10 +153,10 @@ export function fitView(
   const MIN_SPAN = 70;
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   const dx = Math.max(x1 - x0, MIN_SPAN);
-  const dy = Math.max(y1 - y0, MIN_SPAN * (MAP_HEIGHT / MAP_WIDTH));
+  const dy = Math.max(y1 - y0, MIN_SPAN * (height / MAP_WIDTH));
 
-  const zoom = Math.max(1, Math.min(maxZoom, 0.8 * Math.min(MAP_WIDTH / dx, MAP_HEIGHT / dy)));
+  const zoom = Math.max(1, Math.min(maxZoom, 0.8 * Math.min(MAP_WIDTH / dx, height / dy)));
   if (zoom < 1.15) return WORLD_VIEW;
   const center = (projection.invert?.([cx, cy]) ?? WORLD_VIEW.center) as [number, number];
-  return clampView({ center, zoom });
+  return clampView({ center, zoom }, height);
 }
