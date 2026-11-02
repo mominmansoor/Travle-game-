@@ -58,9 +58,15 @@ when a leg ends, a result window shows your guesses against the best possible, y
 
 ### land & sea
 
-switch the dropdown at the top of the sidebar from **Overland** to **Land & sea** (it's also in settings) and seas and oceans become stops you can name, just like countries. countries never connect straight across water: to cross, you have to type the water itself. United States → **Bering Strait** → Russia, United Kingdom → **English Channel** → France, Spain → **Mediterranean Sea** → Egypt. each one counts as a guess.
+switch the dropdown at the top of the sidebar from **Overland** to **Land & sea** (it's also in settings) to cross water. countries never connect straight across the sea: to cross, you type the water itself as a stop, and it counts as a guess. Malaysia → **South China Sea** → Philippines, Spain → **Strait of Gibraltar** → Morocco, United Kingdom → **English Channel** → France.
 
-there are 32 of them, from the five oceans down to straits like Gibraltar, and common names work too ("Med", "Bering Sea", "Arabian Gulf"). this is also what puts island countries like Japan, Sri Lanka, Australia and Fiji into puzzles. since an ocean touches dozens of coasts the world gets a lot smaller, so this mode uses shorter routes for each leg. switching rebuilds all five legs.
+the seas are kept small and local on purpose, so water is never a shortcut across a continent:
+
+- straits and narrow seas between neighbours, like Gibraltar, the Øresund, Bab-el-Mandeb and Hormuz
+- the seas that reach islands you can't get to by land: the South China Sea, Celebes Sea and Luzon Strait for the Philippines, the Sea of Japan and Korea Strait for Japan, the Timor, Arafura and Coral Seas for Australia, the Palk Strait for Sri Lanka, and a few Caribbean channels
+- there are no big oceans, and seas don't connect to each other. the only exception is a "Pacific Islands" stop that links the small island nations to each other and nothing else
+
+so going from the UAE to the Philippines means crossing Asia by land and only taking to the water at the end, from China, Vietnam, Malaysia or Indonesia. there are 37 seas and straits, and short names work too ("Gibraltar", "Hormuz", "Malacca"). Mauritius has no nearby sea in the list, so it sits this mode out.
 
 ### the map
 
@@ -88,11 +94,11 @@ it's built to be played on a phone too. the menu buttons move into the title bar
 
 ## under the hood
 
-the world is an adjacency list. countries are nodes and shared land borders are edges, with an optional second layer of sea edges for land & sea mode. every guess runs a breadth first search to the destination and compares the distance before and after, and that's what decides the colour.
+the world is an adjacency list. countries are nodes and shared land borders are edges, with an optional second layer for land & sea mode where each sea is its own node, joined only to the countries on its coast. every guess runs a breadth first search to the destination and compares the distance before and after, and that's what decides the colour.
 
 puzzles come from a seed fed into a tiny random number generator (mulberry32). the seed is fresh every browser session so you get new routes each time you open it, and each leg only picks routes inside its hop range. leg V pulls from the weird landlocked countries on purpose.
 
-the map is SVG via react-simple-maps. the dither patterns are scaled against the zoom, so one "pixel" of dither is always two screen pixels however far in you are. on narrow screens the map frame gets taller, and the camera framing takes the frame's height into account. the fonts (Rubik and Pixelify Sans) are bundled with the site rather than loaded from Google.
+the map is SVG via react-simple-maps. in land & sea mode, the seas show up as faint ≈ marks so you can see where they are, and get their name once you use one. the dither patterns are scaled against the zoom, so one "pixel" of dither is always two screen pixels however far in you are. on narrow screens the map frame gets taller, and the camera framing takes the frame's height into account. the fonts (Rubik and Pixelify Sans) are bundled with the site rather than loaded from Google.
 
 your stats, palette, settings and unlocked legs sit in local storage: games played, arrivals, current streak, best streak and a 30 day chart. nothing leaves your browser.
 

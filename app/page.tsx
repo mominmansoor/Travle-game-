@@ -425,7 +425,7 @@ export default function Home() {
                       onSubmit={handleGuess}
                       excluded={usedCodes}
                       options={guessOptions(levelOcean)}
-                      placeholder={levelOcean ? "Your next country, sea or ocean" : undefined}
+                      placeholder={levelOcean ? "Your next country or sea" : undefined}
                     />
                   ) : (
                     <div className="composer done">
@@ -485,8 +485,9 @@ export default function Home() {
             </ul>
             <p>
               There&apos;s no guess limit, but fewer is better, and each country can only be entered once. The bulb gives a
-              hint, the flag turns back and shows you the route. Switch to <b>Land &amp; sea</b> and seas become stops
-              too: United States → Bering Strait → Russia.
+              hint, the flag turns back and shows you the route. Switch to <b>Land &amp; sea</b> to cross water: name the
+              sea or strait as a stop, like Malaysia → South China Sea → Philippines. Only small, local seas count, so
+              there are no ocean shortcuts.
             </p>
             <p>
               Press <kbd>/</kbd> to start typing from anywhere, <kbd>↑</kbd><kbd>↓</kbd> to pick, <kbd>⏎</kbd> to go.
@@ -523,7 +524,7 @@ export default function Home() {
           {(
             [
               { key: "sounds", label: "Sounds", hint: "Little beeps for each guess." },
-              { key: "oceanCrossings", label: "Land & sea", hint: "Seas and oceans become stops you can name. Redraws all five legs." },
+              { key: "oceanCrossings", label: "Land & sea", hint: "Name a nearby sea or strait to cross it, like Spain → Strait of Gibraltar → Morocco. Redraws all five legs." },
             ] as { key: keyof typeof settings; label: string; hint: string }[]
           ).map(({ key, label, hint }) => (
             <label key={key} className="check-row">
