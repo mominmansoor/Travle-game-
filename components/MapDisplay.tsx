@@ -20,6 +20,7 @@ import {
   MAP_WIDTH,
   MARKER_COUNTRIES,
   WORLD_VIEW,
+  WORLD_FEATURES,
   clampView,
   fitView,
   hopEndpoints,
@@ -27,7 +28,6 @@ import {
 import { Guess } from "@/lib/gameState";
 import { connectedComponent, getNeighbors } from "@/lib/bfs";
 import { useSettings } from "@/components/SettingsProvider";
-import worldTopojson from "world-atlas/countries-110m.json";
 
 interface MapDisplayProps {
   guesses: Guess[];
@@ -254,7 +254,7 @@ export default function MapDisplay({
   // patterns it points at live in <defs>), so it's memoised.
   const countryLayer = useMemo(
     () => (
-      <Geographies geography={worldTopojson as object}>
+      <Geographies geography={WORLD_FEATURES as object}>
         {({ geographies }) =>
           geographies.map((geo) => {
             const a2 = TOPO_NAME_TO_ALPHA2[geo.properties.name as string];

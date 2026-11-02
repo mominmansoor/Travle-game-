@@ -50,7 +50,7 @@ export const ALPHA2_TO_ALPHA3: Record<string, string> = {
 /**
  * Maps the exact country name strings used in the world-atlas/countries-110m.json
  * topojson file to our game's alpha-2 codes, handling all naming discrepancies.
- * Israel is intentionally absent — the topojson "Palestine" entry maps to PS.
+ * Both the topojson "Israel" and "Palestine" shapes map to PS (Palestine).
  */
 export const TOPO_NAME_TO_ALPHA2: Record<string, string> = {
   // Africa
@@ -104,7 +104,10 @@ export const TOPO_NAME_TO_ALPHA2: Record<string, string> = {
   "W. Sahara": "EH",
   Zambia: "ZM",
   Zimbabwe: "ZW",
-  Palestine: "PS",                // No Israel entry
+  // The game has one country here: Palestine. Both map shapes belong to it,
+  // so naming Palestine fills the whole area, not just the West Bank.
+  Palestine: "PS",
+  Israel: "PS",
 
   // Americas
   Argentina: "AR",

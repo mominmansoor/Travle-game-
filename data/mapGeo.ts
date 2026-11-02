@@ -1,5 +1,5 @@
 import { geoArea, geoBounds, geoCentroid, geoEqualEarth, geoPath, GeoProjection } from "d3-geo";
-import { feature } from "topojson-client";
+import { feature, merge } from "topojson-client";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import worldTopojson from "world-atlas/countries-110m.json";
@@ -46,10 +46,40 @@ export const MARKER_COUNTRIES: Record<string, [number, number]> = {
 type CountryFeature = Feature<Polygon | MultiPolygon, { name: string }>;
 
 const world = worldTopojson as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
-const collection = feature(world, world.objects.countries) as unknown as FeatureCollection<
+const rawCollection = feature(world, world.objects.countries) as unknown as FeatureCollection<
   Polygon | MultiPolygon,
   { name: string }
 >;
+
+/**
+ * The world as drawn in the game. Where the atlas splits one game country
+ * into several shapes (Israel + Palestine → Palestine), they're merged into
+ * a single shape so there's no border line through the middle.
+ */
+const collection: FeatureCollection<Polygon | MultiPolygon, { name: string }> = (() => {
+  const groups = new Map<string, string[]>(); // alpha-2 → atlas names
+  for (const f of rawCollection.features) {
+    const a2 = TOPO_NAME_TO_ALPHA2[f.properties.name];
+    if (a2) groups.set(a2, [...(groups.get(a2) ?? []), f.properties.name]);
+  }
+  const split = new Map(Array.from(groups).filter(([, names]) => names.length > 1));
+  if (split.size === 0) return rawCollection;
+
+  const features = rawCollection.features.filter((f) => !split.has(TOPO_NAME_TO_ALPHA2[f.properties.name]));
+  for (const [a2, names] of Array.from(split)) {
+    const geoms = world.objects.countries.geometries.filter((g) => names.includes((g.properties as { name: string }).name));
+    const keep = names.find((n) => n === nameForCode(a2)) ?? names[0];
+    features.push({ type: "Feature", properties: { name: keep }, geometry: merge(world, geoms as never) });
+  }
+  return { type: "FeatureCollection", features };
+})();
+
+function nameForCode(a2: string): string | undefined {
+  return Object.keys(TOPO_NAME_TO_ALPHA2).find((n) => TOPO_NAME_TO_ALPHA2[n] === a2 && n !== "Israel");
+}
+
+/** Country shapes for the map layer (GeoJSON, with merged shapes applied). */
+export const WORLD_FEATURES = collection;
 
 /** Largest single polygon of a country — mainland France, lower-48 US, etc. */
 function mainland(f: CountryFeature): Feature<Polygon> {
@@ -79,14 +109,33 @@ interface CountryGeo {
 /** Geometry lookup keyed by alpha-2 code. */
 export const COUNTRY_GEO: Map<string, CountryGeo> = (() => {
   const m = new Map<string, CountryGeo>();
+  const areas = new Map<string, number>();
   for (const f of collection.features as CountryFeature[]) {
     const a2 = TOPO_NAME_TO_ALPHA2[f.properties.name];
-    if (!a2 || m.has(a2)) continue;
+    if (!a2) continue;
     const main = mainland(f);
-    m.set(a2, {
+    const area = geoArea(main);
+    const geo: CountryGeo = {
       anchor: geoCentroid(main) as [number, number],
       bounds: geoBounds(main) as [[number, number], [number, number]],
+    };
+    const prev = m.get(a2);
+    if (!prev) {
+      m.set(a2, geo);
+      areas.set(a2, area);
+      continue;
+    }
+    // Two map shapes for one country (Palestine): label from the bigger
+    // shape, and frame the camera around both.
+    const big = area > (areas.get(a2) ?? 0) ? geo : prev;
+    m.set(a2, {
+      anchor: big.anchor,
+      bounds: [
+        [Math.min(prev.bounds[0][0], geo.bounds[0][0]), Math.min(prev.bounds[0][1], geo.bounds[0][1])],
+        [Math.max(prev.bounds[1][0], geo.bounds[1][0]), Math.max(prev.bounds[1][1], geo.bounds[1][1])],
+      ],
     });
+    areas.set(a2, Math.max(area, areas.get(a2) ?? 0));
   }
   for (const [code, pt] of Object.entries(MARKER_COUNTRIES)) {
     if (!m.has(code)) m.set(code, { anchor: pt, bounds: [pt, pt] });
