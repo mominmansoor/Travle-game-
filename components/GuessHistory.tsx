@@ -9,6 +9,8 @@ interface GuessHistoryProps {
   startName: string;
   endName: string;
   greenChain: string[];
+  /** How to name a stop in the current mode (capitals or countries) */
+  nameFor?: (code: string) => string;
 }
 
 const STYLE: Record<GuessColor, { sw: string; label: string; row: string }> = {
@@ -18,7 +20,7 @@ const STYLE: Record<GuessColor, { sw: string; label: string; row: string }> = {
 };
 
 /** The logbook: a file-tree of where you've been, newest at the bottom. */
-export default function GuessHistory({ guesses, startName, endName }: GuessHistoryProps) {
+export default function GuessHistory({ guesses, startName, endName, nameFor }: GuessHistoryProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function GuessHistory({ guesses, startName, endName }: GuessHisto
                 <span className={`sw ${s.sw}`} aria-label={s.label} />
                 <span className="name">
                   {g.code.startsWith("~") && "≈ "}
-                  {g.name}
+                  {nameFor ? nameFor(g.code) : g.name}
                 </span>
               </div>
             </li>

@@ -68,6 +68,12 @@ the seas are kept small and local on purpose, so water is never a shortcut acros
 
 so going from the UAE to the Philippines means crossing Asia by land and only taking to the water at the end, from China, Vietnam, Malaysia or Indonesia. there are 37 seas and straits, and short names work too ("Gibraltar", "Hormuz", "Malacca"). Mauritius has no nearby sea in the list, so it sits this mode out.
 
+### capitals
+
+switch the second dropdown in the sidebar from **Countries** to **Capitals** (it's also in settings) and you play the same routes with capital cities instead. every stop is typed as its capital, and the route, the map tags, the logbook and the result all show capitals too, so Italy → Serbia becomes Rome → Vienna → Budapest → Belgrade. hover or tap a country you've revealed to see which country a capital belongs to.
+
+where a country has more than one capital, the game shows the one most people treat as the main one (Pretoria, Sucre, Amsterdam, Bern), but the others still count if you type them (Cape Town, La Paz, The Hague). common spellings work too, like Kiev, Bogota or Washington DC. it works with land & sea as well, where seas keep their own names.
+
 ### the map
 
 it zooms in to frame your route and follows along as you guess, so a round through the Balkans isn't a speck on a world map. the countries you've linked up get joined with route lines (dashed across water), your start gets a pixel flag and the destination a pixel pin, and tiny countries the world map can't draw (Malta, Singapore, the Pacific islands) show up as little squares. hover or tap a country you've revealed to see its name. drag to pan, ctrl+scroll or pinch to zoom, and **fit** snaps back to your route.
@@ -100,7 +106,7 @@ puzzles come from a seed fed into a tiny random number generator (mulberry32). t
 
 the map is SVG via react-simple-maps. in land & sea mode, the seas show up as faint ≈ marks so you can see where they are, and get their name once you use one. the dither patterns are scaled against the zoom, so one "pixel" of dither is always two screen pixels however far in you are. on narrow screens the map frame gets taller, and the camera framing takes the frame's height into account. the fonts (Rubik and Pixelify Sans) are bundled with the site rather than loaded from Google.
 
-your stats, palette, settings and unlocked legs sit in local storage: games played, arrivals, current streak, best streak and a 30 day chart. nothing leaves your browser.
+your stats, palette, settings (including capitals mode) and unlocked legs sit in local storage: games played, arrivals, current streak, best streak and a 30 day chart. nothing leaves your browser.
 
 ## run it yourself
 
@@ -118,7 +124,7 @@ then open http://localhost:3000
 ```
 app/          the page, layout and all the styles
 components/   map, guess bar, logbook, ledger chart, popup window, icons, palette picker
-data/         countries, border data, sea links, map geometry, puzzle generation, palettes
+data/         countries, capitals, border data, seas, map geometry, puzzle generation, palettes
 lib/          BFS pathfinding, game state, audio, palette handling
 docs/         the screenshots in this readme
 ```

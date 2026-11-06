@@ -53,6 +53,8 @@ export interface Settings {
   greenText: boolean;
   /** Allow moves across straits / island chains (incl. the Bering Strait) */
   oceanCrossings: boolean;
+  /** Capitals mode: every stop is typed and shown as its capital city */
+  capitals: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sounds: true,
   greenText: false,
   oceanCrossings: false,
+  capitals: false,
 };
 
 // ── Level State ──────────────────────────────────────────────────────────────

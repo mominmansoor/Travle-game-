@@ -37,6 +37,8 @@ interface MapDisplayProps {
   optimalPath: string[];
   greenChain: string[];
   ocean?: boolean;
+  /** How to name a stop in the current mode (capitals or countries) */
+  nameFor?: (code: string) => string;
 }
 
 type View = { center: [number, number]; zoom: number };
@@ -77,6 +79,7 @@ export default function MapDisplay({
   optimalPath,
   greenChain,
   ocean = false,
+  nameFor = nodeName,
 }: MapDisplayProps) {
   const { themeVersion } = useSettings();
 
@@ -433,13 +436,13 @@ export default function MapDisplay({
             {startGeo && (
               <Marker key={`start-${startCode}`} coordinates={startGeo.anchor} style={{ default: noHit }}>
                 <PixelSprite art={FLAG} anchor={[0, 13]} scale={2 * u} palette={{ X: colors.ink, F: colors.hi }} haloColor={colors.paper} />
-                <NameTag text={nameOf(startCode)} x={-6 * u} y={-26 * u} u={u} colors={colors} side="left" />
+                <NameTag text={nameFor(startCode)} x={-6 * u} y={-26 * u} u={u} colors={colors} side="left" />
               </Marker>
             )}
             {endGeo && (
               <Marker key={`end-${endCode}`} coordinates={endGeo.anchor} style={{ default: noHit }}>
                 <PixelSprite art={PIN} anchor={[4, 13]} scale={2 * u} palette={{ X: colors.ink, W: colors.warn, O: colors.paper }} haloColor={colors.paper} delay={120} />
-                <NameTag text={nameOf(endCode)} x={12 * u} y={-28 * u} u={u} colors={colors} accent={colors.warn} />
+                <NameTag text={nameFor(endCode)} x={12 * u} y={-28 * u} u={u} colors={colors} accent={colors.warn} />
               </Marker>
             )}
           </ZoomableGroup>
@@ -453,7 +456,9 @@ export default function MapDisplay({
               top: hover.y + 16,
             }}
           >
-            {nameOf(hover.code)}
+            {nameFor(hover.code)}
+            {/* capitals mode: say which country the capital belongs to */}
+            {nameFor(hover.code) !== nodeName(hover.code) && <span className="tag"> · {nodeName(hover.code)}</span>}
             {hover.code === startCode && <span className="tag"> · start</span>}
             {hover.code === endCode && <span className="tag"> · destination</span>}
           </div>

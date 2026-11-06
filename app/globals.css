@@ -175,6 +175,8 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
   background: var(--paper);
   margin-bottom: 18px;
 }
+.modes { display: grid; gap: 12px; margin-bottom: 18px; }
+.modes .select { margin-bottom: 0; }
 .select select {
   appearance: none;
   flex: 1;
@@ -690,7 +692,7 @@ button:focus-visible, select:focus-visible, [role="option"]:focus-visible, [role
   .suggestion { padding: 9px 12px; font-size: 1.05rem; }
 
   .area-legs { padding: 14px 12px; border-top: var(--line) solid var(--ink); }
-  .area-legs .select { margin-bottom: 12px; }
+  .area-legs .modes { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .area-legs .tree-head { display: none; }
   .area-legs .tree { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0; }
   .area-legs .tree li::before, .area-legs .tree li::after { display: none; }

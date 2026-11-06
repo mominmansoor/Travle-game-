@@ -10,7 +10,7 @@ import ThemeSelector from "@/components/ThemeSelector";
 import { useSettings } from "@/components/SettingsProvider";
 import { generatePuzzle, getSessionSeed, levelSeed } from "@/data/puzzles";
 import { connectedComponent, evaluateGuess, findConnectedPath, nextStop } from "@/lib/bfs";
-import { guessOptions, isWater, nodeName } from "@/data/nodes";
+import { displayName, guessOptions, isWater } from "@/data/nodes";
 import {
   initLevelState,
   recordLevelResult,
@@ -33,12 +33,14 @@ const NUMERALS = ["I", "II", "III", "IV", "V"];
 const HELP_SEEN_KEY = "travle_help_seen";
 
 
-const nameOf = nodeName;
 
 type Panel = "none" | "help" | "stats" | "themes" | "settings" | "result";
 
 export default function Home() {
   const { settings, updateSettings } = useSettings();
+  const capitals = settings.capitals;
+  /** A stop's name in the current mode: its capital in capitals mode */
+  const nameOf = (code: string) => displayName(code, capitals);
 
   const [sessionSeed, setSessionSeed] = useState(0);
   const [activeLevel, setActiveLevel] = useState(1);
@@ -209,7 +211,9 @@ export default function Home() {
       currentState.pathLength,
       currentState.hintsUsed ?? 0
     );
-    navigator.clipboard.writeText(str).catch(() => {});
+    // mark capitals runs so friends know which game you played
+    const text = capitals ? str.replace(/^([^\n]*)/, "$1 · capitals") : str;
+    navigator.clipboard.writeText(text).catch(() => {});
     setShareMsg("Copied");
     setTimeout(() => setShareMsg(""), 2000);
   }
@@ -332,6 +336,7 @@ export default function Home() {
 
             {/* ── Legs ── */}
             <div className="area-legs">
+              <div className="modes">
               <label className="select">
                 <span className="sr-only">Route type</span>
                 <select
@@ -344,6 +349,19 @@ export default function Home() {
                 </select>
                 <span className="caret"><IconCaret /></span>
               </label>
+              <label className="select">
+                <span className="sr-only">Game mode</span>
+                <select
+                  value={capitals ? "capitals" : "countries"}
+                  onChange={(e) => updateSettings({ capitals: e.target.value === "capitals" })}
+                  aria-label="Game mode"
+                >
+                  <option value="countries">Countries</option>
+                  <option value="capitals">Capitals</option>
+                </select>
+                <span className="caret"><IconCaret /></span>
+              </label>
+              </div>
 
               <div className="tree-head">
                 <span className="box" aria-hidden />
@@ -401,6 +419,7 @@ export default function Home() {
                     optimalPath={currentState.optimalPath}
                     greenChain={currentState.greenChain}
                     ocean={levelOcean}
+                    nameFor={nameOf}
                   />
 
                   {guessError ? (
@@ -424,8 +443,12 @@ export default function Home() {
                     <GuessInput
                       onSubmit={handleGuess}
                       excluded={usedCodes}
-                      options={guessOptions(levelOcean)}
-                      placeholder={levelOcean ? "Your next country or sea" : undefined}
+                      options={guessOptions(levelOcean, capitals)}
+                      placeholder={
+                        capitals
+                          ? levelOcean ? "Your next capital or sea" : "Your next capital"
+                          : levelOcean ? "Your next country or sea" : undefined
+                      }
                     />
                   ) : (
                     <div className="composer done">
@@ -453,6 +476,7 @@ export default function Home() {
                   startName={startName}
                   endName={endName}
                   greenChain={currentState.greenChain}
+                  nameFor={nameOf}
                 />
               )}
             </aside>
@@ -464,7 +488,7 @@ export default function Home() {
               <span className="wide">best {minGuesses}</span>
               <span className="wide">hints {hintsUsed}</span>
               <span className="fill" />
-              <span>{status === "won" ? "arrived" : status === "lost" ? "turned back" : levelOcean ? "land + sea" : "overland"}</span>
+              <span>{status === "won" ? "arrived" : status === "lost" ? "turned back" : `${capitals ? "capitals · " : ""}${levelOcean ? "land + sea" : "overland"}`}</span>
             </footer>
           </div>
         </div>
@@ -488,6 +512,10 @@ export default function Home() {
               hint, the flag turns back and shows you the route. Switch to <b>Land &amp; sea</b> to cross water: name the
               sea or strait as a stop, like Malaysia → South China Sea → Philippines. Only small, local seas count, so
               there are no ocean shortcuts.
+            </p>
+            <p>
+              Switch to <b>Capitals</b> to play with capital cities instead: every stop is typed as its capital, so
+              Italy → Serbia becomes Rome → Vienna → Budapest → Belgrade.
             </p>
             <p>
               Press <kbd>/</kbd> to start typing from anywhere, <kbd>↑</kbd><kbd>↓</kbd> to pick, <kbd>⏎</kbd> to go.
@@ -524,6 +552,7 @@ export default function Home() {
           {(
             [
               { key: "sounds", label: "Sounds", hint: "Little beeps for each guess." },
+              { key: "capitals", label: "Capitals", hint: "Type capital cities instead of countries: Rome → Vienna → Budapest. Other capitals of a country count too." },
               { key: "oceanCrossings", label: "Land & sea", hint: "Name a nearby sea or strait to cross it, like Spain → Strait of Gibraltar → Morocco. Redraws all five legs." },
             ] as { key: keyof typeof settings; label: string; hint: string }[]
           ).map(({ key, label, hint }) => (
